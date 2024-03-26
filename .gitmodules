@@ -1,0 +1,8 @@
+[submodule "extern/pybind11"]
+	path = extern/pybind11
+	url = ../../pybind/pybind11
+	branch = stable
+
+[submodule "test/tiny-dpcpp-data"]
+	path = test/tiny-dpcpp-data
+	url = git@github.com:intel-sandbox/tiny-dpcpp-data.git
