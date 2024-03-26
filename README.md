@@ -24,23 +24,30 @@ Finally, plot the results using
 python benchmarks/plot_results.py
 ```
 ### Performance on PVC
-We reach up 60x to compared to PyTorch.
-
+We reach up 60x to compared to PyTorch:
 <table>
 <tr>
 <td>
-<img src="benchmarks/results/training_throughput_comparison_width64.png" alt="Training Throughput Comparison" />
+<img src="benchmarks/results/training_throughput_comparison_width64_readme.png" alt="Training Throughput Comparison" />
 </td>
 <td>
-<img src="benchmarks/results/inference_throughput_comparison_width64.png" alt="Inference Throughput Comparison" />
+<img src="benchmarks/results/inference_throughput_comparison_width64_readme.png" alt="Inference Throughput Comparison" />
 </td>
 </tr>
 </table>
 
 ### Performance on Arc 770
-We reach up to 20x compared to PyTorch.
-![Image](data/performances.png)
-
+We reach up to 20x compared to PyTorch:
+<table>
+<tr>
+<td>
+<img src="benchmarks/results/training_throughput_comparison_width32_readme.png" alt="Training Throughput Comparison" />
+</td>
+<td>
+<img src="benchmarks/results/inference_throughput_comparison_width32_readme.png" alt="Inference Throughput Comparison" />
+</td>
+</tr>
+</table>
 
 ## Features
 - High-Performance Computing: Optimized to run efficiently on Intel Data Center GPUs, enabling high-throughput training and inference with up to 60x over PyTorch.
