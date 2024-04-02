@@ -5,10 +5,10 @@ import numpy as np
 import time
 import json
 
-# DEVICE_NAME = "cuda"
-DEVICE_NAME = "xpu"
+DEVICE_NAME = "cuda"
+# DEVICE_NAME = "xpu"
 
-USE_TINY_NN = True
+USE_TINY_NN = False
 
 if DEVICE_NAME == "xpu":
     import intel_extension_for_pytorch as ipex  # required for xpu support
@@ -192,7 +192,8 @@ def start_training(
 
 if __name__ == "__main__":
     # Benchmark
-    WIDTHS = [16, 32, 64, 128]
+    WIDTHS = [32]
+    # WIDTHS = [16, 32, 64, 128]
     for WIDTH in WIDTHS:
         print(f"WIDTH: {WIDTH}")
         input_size = WIDTH
@@ -221,16 +222,16 @@ if __name__ == "__main__":
         )
 
     print("Benchmark")
-    input_size = 64
-    hidden_sizes = [64] * 11
-    output_size = 64
+    input_size = 32
+    hidden_sizes = [32] * 11
+    output_size = 32
     batch_sizes = [2**17]
     start_training(input_size, hidden_sizes, output_size, batch_sizes)
 
     # Image compression
     print("Image compression")
     input_size = 32
-    hidden_sizes = [64] * 2
+    hidden_sizes = [32] * 2
     output_size = 1
     batch_sizes = [2**22]
     start_training(input_size, hidden_sizes, output_size, batch_sizes)
@@ -238,7 +239,7 @@ if __name__ == "__main__":
     # NeRF
     print("Nerf")
     input_size = 32
-    hidden_sizes = [64] * 4
+    hidden_sizes = [32] * 4
     output_size = 4
     batch_sizes = [2**20]
     start_training(input_size, hidden_sizes, output_size, batch_sizes)
@@ -246,7 +247,7 @@ if __name__ == "__main__":
     # Pinns
     print("Pinns ")
     input_size = 3
-    hidden_sizes = [64] * 5
+    hidden_sizes = [32] * 5
     output_size = 3
     batch_sizes = [
         2**17,
