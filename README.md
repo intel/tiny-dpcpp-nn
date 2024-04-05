@@ -1,3 +1,5 @@
+https://github.com/intel/tiny-dpcpp-nn
+
 ## Introduction
 
 This repository implements a GPU-accelerated tiny neural network framework using Intel hardware, based on the [original CUDA implementation](https://github.com/NVlabs/tiny-cuda-nn). The implementation uses the Intel DPC++ compiler and relies on the SYCL language with optional ESIMD acceleration.
