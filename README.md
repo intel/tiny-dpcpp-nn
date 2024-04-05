@@ -112,7 +112,7 @@ When setting the additional flag `BUILD_TORCH_TEST=ON`, the libtorch tests (`tnn
 To have all tests, run:
 
 ```bash
-cmake -DTARGET_DEVICE="PVC" -DBUILD_TEST="ON" -DBUILD_REF_TEST="ON" ..
+cmake -DTARGET_DEVICE="PVC" -DBUILD_REF_TEST="ON" -DBUILD_TORCH_TEST="ON" ..
 ```
 
 After all tests are build, you can run `bash test/run_tests.sh` to verfiy that the setup is correct. Please note that we provide tests for both the core `dpcpp` implementation and the `libtorch` wrapper implementation.
