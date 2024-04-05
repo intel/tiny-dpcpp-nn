@@ -1,4 +1,5 @@
-https://github.com/intel/tiny-dpcpp-nn
+![Static Badge](https://img.shields.io/badge/status-research_project-blue)
+
 
 ## Introduction
 
