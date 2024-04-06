@@ -61,8 +61,7 @@ We reach up to 20x compared to PyTorch:
 
 ## Documentation
 
-For a detailed documentation, please refer to [tiny-dpcpp-nn documentation](https://intel.github.io/tiny-dpcpp-nn/).
-
+For a detailed documentation, please refer to [tiny-dpcpp-nn documentation](https://intel.github.io/tiny-dpcpp-nn/) and for a detailed description of our fully-fused algorithm, please refer to our [paper](https://arxiv.org/abs/2403.17607)
 ## Build
 
 To build the tiny-nn librairy, you can clone the github repo on your machine and put your code in the source folder. After cloning, if you choose to use the pybindings, please recursive pull the pybind11 repositories via
@@ -121,7 +120,8 @@ To test whether the pytorch bindings were installed correctly, please run
 ## Citation
 
 ## Citation
-If you found this work useful, please consider citing this work as:
+If you found this work useful, please consider citing this work:
+
 ```bibtex
 @software{tiny-dpcpp-nn,
 	author = {Bauinger, Christoph and Yuan, Kai},
