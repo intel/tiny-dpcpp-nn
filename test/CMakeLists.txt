@@ -8,15 +8,12 @@ function(check_or_clone_data_repository)
     if(NOT EXISTS "${PROJECT_SOURCE_DIR}/test/tiny-dpcpp-data/ref_values")
         message(STATUS "tiny-dpcpp-data does not exist in ${PROJECT_SOURCE_DIR}/test/. Clone tiny-dpcpp-data repository. This might take a bit")
         execute_process(
-            COMMAND git clone https://github.com/intel-sandbox/tiny-dpcpp-data.git test/tiny-dpcpp-data
+            COMMAND git submodule update --init -- test/tiny-dpcpp-data
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             RESULT_VARIABLE clone_result
         )
         if(clone_result)
-            message(FATAL_ERROR "Failed to clone tiny-dpcpp-data repository")
-            # Remove the partially cloned repository if it exists
-            file(REMOVE_RECURSE "${PROJECT_SOURCE_DIR}/test/tiny-dpcpp-data/")
-            message(STATUS "Removed incomplete tiny-dpcpp-data repository")
+            message(FATAL_ERROR "Failed to recursive pull tiny-dpcpp-data repository. Please do so manually.")
         endif()
     else()
         message(STATUS "tiny-dpcpp-data repository already exists. Not cloning")

@@ -274,9 +274,10 @@ class Module(torch.nn.Module):
             padded_tensor = (
                 padded_tensor
                 if input_dim == self.width
-                else torch.nn.functional.pad(x, [0, self.width - input_dim, 0, 0])
+                else torch.nn.functional.pad(
+                    padded_tensor, [0, self.width - input_dim, 0, 0]
+                )
             ).to(dtype=self.dtype)
-
         info = {}
 
         if hasattr(self, "n_hidden_layers"):
