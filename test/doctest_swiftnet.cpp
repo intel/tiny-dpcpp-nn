@@ -342,9 +342,24 @@ void test_interm_backw(sycl::queue &q, const int input_width, const int output_w
     std::vector<double> stacked_dL_doutput_ref = mlp_cpp::stack_vector(dL_doutput_ref, batch_size);
     dL_doutput.copy_from_host(mlp_cpp::convert_vector<double, T>(stacked_dL_doutput_ref)).wait();
 
+#ifdef TEST_GRAPH
+    //this is needed as of 2024.1 for SYCL graph to record gemm properly
+    network.backward_pass(dL_doutput, grads, interm_backw, interm_forw, {});
+
+    //record into a graph and execute it
+    sycl::ext::oneapi::experimental::command_graph g{q.get_context(), q.get_device()};
+    g.begin_recording(q);
+    network.backward_pass(dL_doutput, grads, interm_backw, interm_forw, {});
+    g.end_recording();
+    auto gexec = g.finalize();
+    
+    sycl::queue qexec{q.get_context(), q.get_device(), {sycl::ext::intel::property::queue::no_immediate_command_list()}};
+    qexec.ext_oneapi_graph(gexec).wait();
+#else
     // up until here, we load only reference values to test only interm_backw(and grads)
     network.backward_pass(dL_doutput, grads, interm_backw, interm_forw, {});
     q.wait();
+#endif
 
     std::vector<T> interm_backw_vec = interm_backw.copy_to_host();
     q.wait();
@@ -590,8 +605,20 @@ void test_interm_fwd(sycl::queue &q, const int input_width, const int output_wid
 
     interm_forw.fill((T)0).wait();
 
+#ifdef TEST_GRAPH
+    sycl::ext::oneapi::experimental::command_graph g{q.get_context(), q.get_device()};
+    g.begin_recording(q);
+    network.forward_pass(network_input, interm_forw, {});
+    g.end_recording();
+    
+    auto gexec = g.finalize();
+    
+    sycl::queue qexec{q.get_context(), q.get_device(), {sycl::ext::intel::property::queue::no_immediate_command_list()}};
+    qexec.ext_oneapi_graph(gexec).wait();
+#else
     network.forward_pass(network_input, interm_forw, {});
     q.wait();
+#endif
 
     std::vector<std::vector<double>> fwd_result_ref = mlp.forward(input_ref, true);
 
