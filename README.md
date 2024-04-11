@@ -136,7 +136,7 @@ If you found this work useful, please consider citing this work as:
     license = {BSD-3-Clause},
     month = {3},
     title = {{tiny-dpcpp-nn}},
-    url = {https://github.com/intel/tiny-dpcpp-data/},
+    url = {https://github.com/intel/tiny-dpcpp-nn/},
     version = {0.1},
     year = {2024}
 }
