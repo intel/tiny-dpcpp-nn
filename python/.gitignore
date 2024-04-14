@@ -1,2 +1,4 @@
 *.jpg
+!data/images/albert.jpg
+
 tests/*.png
