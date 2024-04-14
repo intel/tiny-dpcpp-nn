@@ -5,10 +5,13 @@ import numpy as np
 import time
 import json
 
-DEVICE_NAME = "cuda"
-# DEVICE_NAME = "xpu"
+# DEVICE_NAME = "cuda"
+DEVICE_NAME = "xpu"
 
-USE_TINY_NN = False
+# USE_TINY_NN = False
+USE_TINY_NN = True
+
+DTYPE = torch.bfloat16
 
 if DEVICE_NAME == "xpu":
     import intel_extension_for_pytorch as ipex  # required for xpu support
@@ -52,6 +55,7 @@ def start_training(
             output_func,
         ).to(DEVICE_NAME)
         model.set_weights()
+        model.to(DTYPE)
 
     # Run the network
     bench_result = {
@@ -84,9 +88,11 @@ def start_training(
 
         loss_fn = torch.nn.MSELoss()
 
-        target_tensor = torch.ones((batch_size, output_size)).to(DEVICE_NAME)
-        input_tensor = torch.ones((batch_size, input_size)).to(DEVICE_NAME)
-        output_ref = torch.ones((batch_size, output_size)).to(DEVICE_NAME) * 0.1074
+        target_tensor = torch.ones((batch_size, output_size)).to(DEVICE_NAME).to(DTYPE)
+        input_tensor = torch.ones((batch_size, input_size)).to(DEVICE_NAME).to(DTYPE)
+        output_ref = (
+            torch.ones((batch_size, output_size)).to(DEVICE_NAME).to(DTYPE) * 0.1074
+        )
         for i in range(N_ITERS):
 
             output_tensor = model_torch(input_tensor)
@@ -190,10 +196,44 @@ def start_training(
             )  # Use indent for pretty-printing
 
 
+def test_use_cases(width):
+    print("Benchmark")
+    input_size = width
+    hidden_sizes = [width] * 11
+    output_size = width
+    batch_sizes = [2**17]
+    start_training(input_size, hidden_sizes, output_size, batch_sizes)
+
+    # Image compression
+    print("Image compression")
+    input_size = width
+    hidden_sizes = [width] * 2
+    output_size = 1
+    batch_sizes = [2**22]
+    start_training(input_size, hidden_sizes, output_size, batch_sizes)
+
+    # NeRF
+    print("Nerf")
+    input_size = width
+    hidden_sizes = [width] * 4
+    output_size = 4
+    batch_sizes = [2**20]
+    start_training(input_size, hidden_sizes, output_size, batch_sizes)
+
+    # Pinns
+    print("Pinns ")
+    input_size = 3
+    hidden_sizes = [width] * 5
+    output_size = 3
+    batch_sizes = [
+        2**17,
+    ]
+    start_training(input_size, hidden_sizes, output_size, batch_sizes)
+
+
 if __name__ == "__main__":
     # Benchmark
-    WIDTHS = [32]
-    # WIDTHS = [16, 32, 64, 128]
+    WIDTHS = [16, 32, 64, 128]
     for WIDTH in WIDTHS:
         print(f"WIDTH: {WIDTH}")
         input_size = WIDTH
@@ -213,6 +253,7 @@ if __name__ == "__main__":
             2**20,
             2**21,
         ]
+        # Test benchmark
         start_training(
             input_size,
             hidden_sizes,
@@ -221,35 +262,5 @@ if __name__ == "__main__":
             f"../benchmarks/results/bench_result_pytorch_{DEVICE_NAME}_width{WIDTH}.json",
         )
 
-    print("Benchmark")
-    input_size = 32
-    hidden_sizes = [32] * 11
-    output_size = 32
-    batch_sizes = [2**17]
-    start_training(input_size, hidden_sizes, output_size, batch_sizes)
-
-    # Image compression
-    print("Image compression")
-    input_size = 32
-    hidden_sizes = [32] * 2
-    output_size = 1
-    batch_sizes = [2**22]
-    start_training(input_size, hidden_sizes, output_size, batch_sizes)
-
-    # NeRF
-    print("Nerf")
-    input_size = 32
-    hidden_sizes = [32] * 4
-    output_size = 4
-    batch_sizes = [2**20]
-    start_training(input_size, hidden_sizes, output_size, batch_sizes)
-
-    # Pinns
-    print("Pinns ")
-    input_size = 3
-    hidden_sizes = [32] * 5
-    output_size = 3
-    batch_sizes = [
-        2**17,
-    ]
-    start_training(input_size, hidden_sizes, output_size, batch_sizes)
+        # Test Uses cases
+        test_use_cases(WIDTH)
