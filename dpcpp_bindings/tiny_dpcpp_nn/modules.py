@@ -61,8 +61,10 @@ class _module_function(torch.autograd.Function):
     @staticmethod
     def forward(ctx, native_tcnn_module, input, params, info):
         batch_size = input.shape[0]
-
-        output = native_tcnn_module.fwd(input.to(params.dtype))
+        if info["is_in_eval_mode"]:
+            output = native_tcnn_module.inference(input.to(params.dtype))
+        else:
+            output = native_tcnn_module.fwd(input.to(params.dtype))
         output = output.reshape(batch_size, -1).to(input.device)
         ctx.save_for_backward(input, output, params)
         ctx.info = info
@@ -278,7 +280,7 @@ class Module(torch.nn.Module):
                     padded_tensor, [0, self.width - input_dim, 0, 0]
                 )
             ).to(dtype=self.dtype)
-        info = {}
+        info = {"is_in_eval_mode": not self.training}
 
         if hasattr(self, "n_hidden_layers"):
             # added for NWE and Network
