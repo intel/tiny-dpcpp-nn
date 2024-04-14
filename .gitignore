@@ -45,5 +45,5 @@ build/
 extern/libtorch
 
 # results
-benchmark/results
+benchmarks/results
 
