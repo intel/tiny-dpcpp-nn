@@ -16,6 +16,7 @@ set(HEADER_FILES
 )
 set(SOURCES
     common.cpp
+    SyclGraph.cpp
     ${HEADER_FILES}
 )
 

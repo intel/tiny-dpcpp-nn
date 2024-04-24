@@ -344,24 +344,9 @@ void test_interm_backw(sycl::queue &q, const int input_width, const int output_w
     std::vector<double> stacked_dL_doutput_ref = mlp_cpp::stack_vector(dL_doutput_ref, batch_size);
     dL_doutput.copy_from_host(mlp_cpp::convert_vector<double, T>(stacked_dL_doutput_ref)).wait();
 
-#ifdef TEST_GRAPH
-    //this is needed as of 2024.1 for SYCL graph to record gemm properly
-    network.backward_pass(dL_doutput, grads, interm_backw, interm_forw, {});
-
-    //record into a graph and execute it
-    sycl::ext::oneapi::experimental::command_graph g{q.get_context(), q.get_device()};
-    g.begin_recording(q);
-    network.backward_pass(dL_doutput, grads, interm_backw, interm_forw, {});
-    g.end_recording();
-    auto gexec = g.finalize();
-    
-    sycl::queue qexec{q.get_context(), q.get_device(), {sycl::ext::intel::property::queue::no_immediate_command_list()}};
-    qexec.ext_oneapi_graph(gexec).wait();
-#else
     // up until here, we load only reference values to test only interm_backw(and grads)
     network.backward_pass(dL_doutput, grads, interm_backw, interm_forw, {});
     q.wait();
-#endif
 
     std::vector<T> interm_backw_vec = interm_backw.copy_to_host();
     q.wait();
@@ -607,20 +592,8 @@ void test_interm_fwd(sycl::queue &q, const int input_width, const int output_wid
 
     interm_forw.fill((T)0).wait();
 
-#ifdef TEST_GRAPH
-    sycl::ext::oneapi::experimental::command_graph g{q.get_context(), q.get_device()};
-    g.begin_recording(q);
-    network.forward_pass(network_input, interm_forw, {});
-    g.end_recording();
-    
-    auto gexec = g.finalize();
-    
-    sycl::queue qexec{q.get_context(), q.get_device(), {sycl::ext::intel::property::queue::no_immediate_command_list()}};
-    qexec.ext_oneapi_graph(gexec).wait();
-#else
     network.forward_pass(network_input, interm_forw, {});
     q.wait();
-#endif
 
     std::vector<std::vector<double>> fwd_result_ref = mlp.forward(input_ref, true);
 
@@ -635,9 +608,9 @@ void test_interm_fwd(sycl::queue &q, const int input_width, const int output_wid
     CHECK(areVectorsWithinTolerance(interm_forw_vec, interm_forw_ref, 1.0e-2));
 }
 
-#ifdef TEST_GRAPH
+
 template <typename T, int WIDTH>
-void test_trainer_graph(sycl::queue &q, const int input_width, const int output_width, const int n_hidden_layers,
+void test_trainer(sycl::queue &q, const int input_width, const int output_width, const int n_hidden_layers,
                 const int batch_size, std::string activation, std::string output_activation,
                 std::string weight_init_mode) {
     T loss_scale = 1.0;
@@ -719,7 +692,6 @@ void test_trainer_graph(sycl::queue &q, const int input_width, const int output_
     auto grad_ref_vec = grads_ref.copy_to_host();
     CHECK(areVectorsWithinTolerance(grad_vec, grad_ref_vec, 1.0e-2));
 }
-#endif
 
 
 TEST_CASE("Swiftnet - Constructor") {
@@ -1382,9 +1354,8 @@ TEST_CASE("Swiftnet - test grad input padded") {
     }
 }
 
-#ifdef TEST_GRAPH
 
-TEST_CASE("Swiftnet - test graph unpadded") {
+TEST_CASE("Swiftnet - test trainer") {
     sycl::queue q(sycl::gpu_selector_v);
     const int n_hidden_layers = 2;
 
@@ -1392,13 +1363,13 @@ TEST_CASE("Swiftnet - test graph unpadded") {
                              std::string output_activation, std::string weight_init_mode) {
         typedef sycl::ext::oneapi::bfloat16 T;
         if (width == 16)
-            test_trainer_graph<T, 16>(q, 16, 16, n_hidden_layers, batch_size, activation, output_activation, weight_init_mode);
+            test_trainer<T, 16>(q, 16, 16, n_hidden_layers, batch_size, activation, output_activation, weight_init_mode);
         else if (width == 32)
-            test_trainer_graph<T, 32>(q, 32, 32, n_hidden_layers, batch_size, activation, output_activation, weight_init_mode);
+            test_trainer<T, 32>(q, 32, 32, n_hidden_layers, batch_size, activation, output_activation, weight_init_mode);
         else if (width == 64)
-            test_trainer_graph<T, 64>(q, 64, 64, n_hidden_layers, batch_size, activation, output_activation, weight_init_mode);
+            test_trainer<T, 64>(q, 64, 64, n_hidden_layers, batch_size, activation, output_activation, weight_init_mode);
         else if (width == 128)
-            test_trainer_graph<T, 128>(q, 128, 128, n_hidden_layers, batch_size, activation, output_activation,
+            test_trainer<T, 128>(q, 128, 128, n_hidden_layers, batch_size, activation, output_activation,
                                weight_init_mode);
         else
             throw std::invalid_argument("Unsupported width");
@@ -1428,4 +1399,3 @@ TEST_CASE("Swiftnet - test graph unpadded") {
         }
     }
 }
-#endif

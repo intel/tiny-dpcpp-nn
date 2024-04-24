@@ -12,6 +12,7 @@
 #include "doctest/doctest.h"
 
 #include "common.h"
+#include "SyclGraph.h"
 
 TEST_CASE("tinydpcppnn::format empty args") {
 
@@ -171,4 +172,24 @@ TEST_CASE("fromPackedLayoutCoord 6") {
     int nrows = 4;
     int ncols = 2;
     CHECK(fromPackedLayoutCoord(idx, nrows, ncols) == 5);
+}
+
+TEST_CASE("tinydpcppnn::SyclGraph::capture_guard"){
+    constexpr int N = 1;
+    auto R = sycl::range<1>( N );
+    sycl::queue q{ sycl::gpu_selector_v };
+    float* vec = sycl::malloc_shared<float>(N, q);
+
+    tinydpcppnn::SyclGraph  sgraph;
+    {
+        auto sg = sgraph.capture_guard(&q);
+        q.submit(
+            [&](sycl::handler& h) {
+                h.parallel_for(R, [=](sycl::id<1> i) { 
+                    vec[ i ] = -2; 
+                } );
+            }
+        );
+    }
+    CHECK(vec[0]==-2);
 }
