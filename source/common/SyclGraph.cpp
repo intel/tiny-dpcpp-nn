@@ -1,4 +1,4 @@
-/** @file   sycl_graph.cpp
+/** @file   SyclGraph.cpp
  *  @author Yantao Zhang (yantao.zhang@intel.com)
  *  @brief  Implementation of SYCL graph 
  *  @todo   Update the executable graph if needed.
