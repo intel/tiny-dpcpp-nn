@@ -58,6 +58,8 @@ doctest_discover_tests(test-encodings)
 
 add_executable(test-swiftnet doctest_swiftnet.cpp)
 add_sycl_to_target(TARGET test-swiftnet SOURCES doctest_swiftnet.cpp)
+target_compile_definitions(test-swiftnet PRIVATE TEST_GRAPH)
+target_include_directories(test-swiftnet PRIVATE ${PROJECT_SOURCE_DIR}/include)
 target_link_libraries(test-swiftnet PRIVATE test-lib network loss common)
 doctest_discover_tests(test-swiftnet)
 

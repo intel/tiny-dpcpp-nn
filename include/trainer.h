@@ -15,7 +15,7 @@
 
 #include "DeviceMatrix.h"
 #include "Network.h"
-
+#include "SyclGraph.h"
 template <typename T> class Trainer {
   public:
     Trainer(Network<T> *network) : m_network(network) {}
@@ -24,9 +24,13 @@ template <typename T> class Trainer {
                                            DeviceMatrix<T> &losses, DeviceMatrices<T> &out_inter_forw,
                                            DeviceMatrices<T> &out_inter_backw,
                                            const std::vector<sycl::event> &dependencies) {
-
+      std::vector<sycl::event> deps = {};
+      {
+#ifdef TEST_GRAPH
+        auto cg = m_graph.capture_guard( &m_network->get_queue() );
+#endif
         // return m_network->training(input, target, m_network->m_forward, m_network->m_out_inter, deps);
-        auto deps = m_network->forward_pass(input, out_inter_forw, dependencies);
+        deps = m_network->forward_pass(input, out_inter_forw, dependencies);
         // auto e = m_loss->evaluate(m_network->get_queue(), scale, output, target, grads, losses);
         // deps = {e};
 
@@ -37,10 +41,11 @@ template <typename T> class Trainer {
         // m_network->m_weights_matrices,
         //               m_network->m_weightsT_matrices,
         //               m_network->m_grads_matrices, WIDTH);
-
-        return deps;
+      }
+      return deps;
     }
 
   private:
     Network<T> *m_network;
+    tinydpcppnn::SyclGraph  m_graph;
 };
