@@ -31,8 +31,12 @@ int main() {
         q.wait();
         benchmark_training<bf16, 16>(1 << 22, 4, 100, q);
         q.wait();
-        for (int iter = 10; iter < 24; iter++) {
+        for (int iter = 10; iter < 23; iter++) {
             benchmark_training<bf16, 64>(1 << iter, 4, 100, q);
+            q.wait();
+        }
+        for (int iter = 10; iter < 23; iter++) {
+            benchmark_training<sycl::half, 64>(1 << iter, 4, 100, q);
             q.wait();
         }
         MPI_Finalize();

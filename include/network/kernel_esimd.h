@@ -20,6 +20,7 @@
 
 #include "DeviceMatrix.h"
 #include "common.h"
+#include "gemm.h"
 #include "oneapi/mkl.hpp"
 
 namespace sycl::ext::intel::esimd::xmx {
@@ -69,7 +70,7 @@ template <> struct XMXCType<bf16> {
 };
 template <> struct XMXCType<sycl::half> {
 #if TARGET_DEVICE == 0
-    typedef sycl::half CType;
+    typedef /*sycl::half*/float CType;
 #elif TARGET_DEVICE == 1
     typedef float CType;
 #endif
@@ -196,6 +197,31 @@ class EsimdKernels {
                 }
             });
         });
+
+        // q.wait();
+        // float * new_forw = sycl::malloc_device<float>(intermediate_forward.nelements(), q);
+        // q.parallel_for(intermediate_forward.nelements(), [=](auto idx) { new_forw[idx] = static_cast<float>(intermediate_forward.GetMatrixPointer(0)[idx]); }).wait();
+        // float * new_backw = sycl::malloc_device<float>(intermediate_backward.nelements(), q);
+        // q.parallel_for(intermediate_backward.nelements(), [=](auto idx) { new_backw[idx] = static_cast<float>(intermediate_backward.GetMatrixPointer(0)[idx]); }).wait();
+        // float * new_out = sycl::malloc_device<float>(output.nelements(), q);
+        // q.parallel_for(output.nelements(), [=](auto idx) { new_out[idx] = static_cast<float>(output.GetMatrixPointer(0)[idx]); }).wait();
+
+        // std::vector<sycl::event> events(n_hidden_layers + 1);
+        // for (int iter = 0; iter < n_hidden_layers + 1; iter++) {
+        //         events[iter] = oneapi::mkl::blas::row_major::gemm(
+        //             q, oneapi::mkl::transpose::trans, oneapi::mkl::transpose::nontrans, WIDTH, WIDTH, M, 1.0,
+        //             new_backw + iter*M*WIDTH, WIDTH, new_forw + iter*M*WIDTH,
+        //             WIDTH, 0, new_out + size_t(iter)*WIDTH*WIDTH, WIDTH, {e});
+        //     }
+        // q.wait();
+        // sycl::free(new_forw, q);
+        // sycl::free(new_backw, q);
+        // q.parallel_for(output.nelements(), [=](auto idx) { output.GetMatrixPointer(0)[idx] = static_cast<T>(new_out[idx]); }).wait();
+        // sycl::free(new_out, q);
+
+        // Gemm<T, WIDTH>::batched(M, n_hidden_layers + 1, intermediate_backward.GetMatrixPointer(0),
+        //                   intermediate_forward.GetMatrixPointer(0), output.GetMatrixPointer(0), q);
+
         // NOTE: MKL gemm_batch is slower.
         std::vector<sycl::event> events(n_hidden_layers + 1);
         if constexpr (std::is_same<T, sycl::ext::oneapi::bfloat16>::value) { // need to cast to onemkls bf16 type.
@@ -571,6 +597,87 @@ class EsimdKernels {
         return {e};
     }
 };
+
+
+extern template class EsimdKernels<bf16, 16, 16, 16, Activation::None, Activation::None>;
+extern template class EsimdKernels<bf16, 16, 16, 16, Activation::None, Activation::ReLU>;
+extern template class EsimdKernels<bf16, 16, 16, 16, Activation::None, Activation::Sigmoid>;
+extern template class EsimdKernels<bf16, 16, 16, 16, Activation::ReLU, Activation::None>;
+extern template class EsimdKernels<bf16, 16, 16, 16, Activation::ReLU, Activation::ReLU>;
+extern template class EsimdKernels<bf16, 16, 16, 16, Activation::ReLU, Activation::Sigmoid>;
+extern template class EsimdKernels<bf16, 16, 16, 16, Activation::Sigmoid, Activation::None>;
+extern template class EsimdKernels<bf16, 16, 16, 16, Activation::Sigmoid, Activation::ReLU>;
+extern template class EsimdKernels<bf16, 16, 16, 16, Activation::Sigmoid, Activation::Sigmoid>;
+
+extern template class EsimdKernels<bf16, 32, 32, 32, Activation::None, Activation::None>;
+extern template class EsimdKernels<bf16, 32, 32, 32, Activation::None, Activation::ReLU>;
+extern template class EsimdKernels<bf16, 32, 32, 32, Activation::None, Activation::Sigmoid>;
+extern template class EsimdKernels<bf16, 32, 32, 32, Activation::ReLU, Activation::None>;
+extern template class EsimdKernels<bf16, 32, 32, 32, Activation::ReLU, Activation::ReLU>;
+extern template class EsimdKernels<bf16, 32, 32, 32, Activation::ReLU, Activation::Sigmoid>;
+extern template class EsimdKernels<bf16, 32, 32, 32, Activation::Sigmoid, Activation::None>;
+extern template class EsimdKernels<bf16, 32, 32, 32, Activation::Sigmoid, Activation::ReLU>;
+extern template class EsimdKernels<bf16, 32, 32, 32, Activation::Sigmoid, Activation::Sigmoid>;
+
+extern template class EsimdKernels<bf16, 64, 64, 64, Activation::None, Activation::None>;
+extern template class EsimdKernels<bf16, 64, 64, 64, Activation::None, Activation::ReLU>;
+extern template class EsimdKernels<bf16, 64, 64, 64, Activation::None, Activation::Sigmoid>;
+extern template class EsimdKernels<bf16, 64, 64, 64, Activation::ReLU, Activation::None>;
+extern template class EsimdKernels<bf16, 64, 64, 64, Activation::ReLU, Activation::ReLU>;
+extern template class EsimdKernels<bf16, 64, 64, 64, Activation::ReLU, Activation::Sigmoid>;
+extern template class EsimdKernels<bf16, 64, 64, 64, Activation::Sigmoid, Activation::None>;
+extern template class EsimdKernels<bf16, 64, 64, 64, Activation::Sigmoid, Activation::ReLU>;
+extern template class EsimdKernels<bf16, 64, 64, 64, Activation::Sigmoid, Activation::Sigmoid>;
+
+extern template class EsimdKernels<bf16, 128, 128, 128, Activation::None, Activation::None>;
+extern template class EsimdKernels<bf16, 128, 128, 128, Activation::None, Activation::ReLU>;
+extern template class EsimdKernels<bf16, 128, 128, 128, Activation::None, Activation::Sigmoid>;
+extern template class EsimdKernels<bf16, 128, 128, 128, Activation::ReLU, Activation::None>;
+extern template class EsimdKernels<bf16, 128, 128, 128, Activation::ReLU, Activation::ReLU>;
+extern template class EsimdKernels<bf16, 128, 128, 128, Activation::ReLU, Activation::Sigmoid>;
+extern template class EsimdKernels<bf16, 128, 128, 128, Activation::Sigmoid, Activation::None>;
+extern template class EsimdKernels<bf16, 128, 128, 128, Activation::Sigmoid, Activation::ReLU>;
+extern template class EsimdKernels<bf16, 128, 128, 128, Activation::Sigmoid, Activation::Sigmoid>;
+
+extern template class EsimdKernels<sycl::half, 16, 16, 16, Activation::None, Activation::None>;
+extern template class EsimdKernels<sycl::half, 16, 16, 16, Activation::None, Activation::ReLU>;
+extern template class EsimdKernels<sycl::half, 16, 16, 16, Activation::None, Activation::Sigmoid>;
+extern template class EsimdKernels<sycl::half, 16, 16, 16, Activation::ReLU, Activation::None>;
+extern template class EsimdKernels<sycl::half, 16, 16, 16, Activation::ReLU, Activation::ReLU>;
+extern template class EsimdKernels<sycl::half, 16, 16, 16, Activation::ReLU, Activation::Sigmoid>;
+extern template class EsimdKernels<sycl::half, 16, 16, 16, Activation::Sigmoid, Activation::None>;
+extern template class EsimdKernels<sycl::half, 16, 16, 16, Activation::Sigmoid, Activation::ReLU>;
+extern template class EsimdKernels<sycl::half, 16, 16, 16, Activation::Sigmoid, Activation::Sigmoid>;
+
+extern template class EsimdKernels<sycl::half, 32, 32, 32, Activation::None, Activation::None>;
+extern template class EsimdKernels<sycl::half, 32, 32, 32, Activation::None, Activation::ReLU>;
+extern template class EsimdKernels<sycl::half, 32, 32, 32, Activation::None, Activation::Sigmoid>;
+extern template class EsimdKernels<sycl::half, 32, 32, 32, Activation::ReLU, Activation::None>;
+extern template class EsimdKernels<sycl::half, 32, 32, 32, Activation::ReLU, Activation::ReLU>;
+extern template class EsimdKernels<sycl::half, 32, 32, 32, Activation::ReLU, Activation::Sigmoid>;
+extern template class EsimdKernels<sycl::half, 32, 32, 32, Activation::Sigmoid, Activation::None>;
+extern template class EsimdKernels<sycl::half, 32, 32, 32, Activation::Sigmoid, Activation::ReLU>;
+extern template class EsimdKernels<sycl::half, 32, 32, 32, Activation::Sigmoid, Activation::Sigmoid>;
+
+extern template class EsimdKernels<sycl::half, 64, 64, 64, Activation::None, Activation::None>;
+extern template class EsimdKernels<sycl::half, 64, 64, 64, Activation::None, Activation::ReLU>;
+extern template class EsimdKernels<sycl::half, 64, 64, 64, Activation::None, Activation::Sigmoid>;
+extern template class EsimdKernels<sycl::half, 64, 64, 64, Activation::ReLU, Activation::None>;
+extern template class EsimdKernels<sycl::half, 64, 64, 64, Activation::ReLU, Activation::ReLU>;
+extern template class EsimdKernels<sycl::half, 64, 64, 64, Activation::ReLU, Activation::Sigmoid>;
+extern template class EsimdKernels<sycl::half, 64, 64, 64, Activation::Sigmoid, Activation::None>;
+extern template class EsimdKernels<sycl::half, 64, 64, 64, Activation::Sigmoid, Activation::ReLU>;
+extern template class EsimdKernels<sycl::half, 64, 64, 64, Activation::Sigmoid, Activation::Sigmoid>;
+
+extern template class EsimdKernels<sycl::half, 128, 128, 128, Activation::None, Activation::None>;
+extern template class EsimdKernels<sycl::half, 128, 128, 128, Activation::None, Activation::ReLU>;
+extern template class EsimdKernels<sycl::half, 128, 128, 128, Activation::None, Activation::Sigmoid>;
+extern template class EsimdKernels<sycl::half, 128, 128, 128, Activation::ReLU, Activation::None>;
+extern template class EsimdKernels<sycl::half, 128, 128, 128, Activation::ReLU, Activation::ReLU>;
+extern template class EsimdKernels<sycl::half, 128, 128, 128, Activation::ReLU, Activation::Sigmoid>;
+extern template class EsimdKernels<sycl::half, 128, 128, 128, Activation::Sigmoid, Activation::None>;
+extern template class EsimdKernels<sycl::half, 128, 128, 128, Activation::Sigmoid, Activation::ReLU>;
+extern template class EsimdKernels<sycl::half, 128, 128, 128, Activation::Sigmoid, Activation::Sigmoid>;
 
 } // namespace esimd
 } // namespace kernels
