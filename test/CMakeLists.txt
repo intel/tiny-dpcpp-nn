@@ -78,6 +78,11 @@ add_sycl_to_target(TARGET test-losses SOURCES doctest_losses.cpp)
 target_link_libraries(test-losses PRIVATE test-lib loss common)
 doctest_discover_tests(test-losses)
 
+add_executable(test-gemm doctest_gemm.cpp)
+add_sycl_to_target(TARGET test-gemm SOURCES doctest_gemm.cpp)
+target_link_libraries(test-gemm PRIVATE test-lib common)
+doctest_discover_tests(test-gemm)
+
 
 if(BUILD_TORCH_TEST)
 
