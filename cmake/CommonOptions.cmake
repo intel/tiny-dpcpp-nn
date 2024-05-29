@@ -17,6 +17,7 @@ function(add_common_flags target)
         add_flag_if_available(${target} -Wextra)
         add_flag_if_available(${target} -Wpedantic)
         add_flag_if_available(${target} -Wundefined-func-template)
+        add_flag_if_available(${target} -fPIC)
     endif()
 endfunction()
 

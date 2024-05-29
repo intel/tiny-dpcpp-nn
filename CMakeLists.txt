@@ -35,16 +35,6 @@ endif()
 
 message(WARNING "cmake build system is still WIP.")
 
-add_subdirectory(source)
-
-enable_testing()
-
-if(BUILD_PYBIND)
-    # Include Pybind11
-    add_subdirectory(extern/pybind11)
-    add_subdirectory(dpcpp_bindings)
-endif()
-
 # Check if either BUILD_PYBIND or BUILD_TORCH_TEST is ON
 if(BUILD_PYBIND OR BUILD_TORCH_TEST OR BUILD_TORCH_BENCHMARK)
     # Check if libtorch directory exists
@@ -94,6 +84,21 @@ if(BUILD_PYBIND OR BUILD_TORCH_TEST OR BUILD_TORCH_BENCHMARK)
     else()
         message(STATUS "libtorch already exists in ${PROJECT_SOURCE_DIR}/extern/.")
     endif()
+
+    #append search path for cmake and add -fPIC otherwise it won't compile. not necessary without pybindings
+    list(APPEND CMAKE_PREFIX_PATH "${PROJECT_SOURCE_DIR}/extern/libtorch/share/cmake/" "${PROJECT_SOURCE_DIR}/extern/libtorch/")
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+endif()
+
+
+
+add_subdirectory(source)
+enable_testing()
+
+if(BUILD_PYBIND)
+    # Include Pybind11
+    add_subdirectory(extern/pybind11)
+    add_subdirectory(dpcpp_bindings)
 endif()
 
 
