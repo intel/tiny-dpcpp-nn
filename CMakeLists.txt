@@ -100,6 +100,7 @@ if(BUILD_PYBIND OR BUILD_TORCH_TEST OR BUILD_TORCH_BENCHMARK)
     else()
         message(STATUS "libtorch already exists in ${PROJECT_SOURCE_DIR}/extern/.")
     endif()
+
 endif()
 
 add_subdirectory(source)

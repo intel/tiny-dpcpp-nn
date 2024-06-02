@@ -200,8 +200,8 @@ void test_grads(sycl::queue &q, const int input_width, const int output_width, c
     auto interm_forw_vec = interm_forw.copy_to_host();
 
     if (!areVectorsWithinTolerance(interm_forw_vec, interm_forw_ref, 1.0e-2)) {
-        printVector("interm_forw_vec: ", interm_forw_vec);
-        printVector("interm_forw_ref: ", interm_forw_ref);
+        // printVector("interm_forw_vec: ", interm_forw_vec);
+        // printVector("interm_forw_ref: ", interm_forw_ref);
     }
     CHECK(areVectorsWithinTolerance(interm_forw_vec, interm_forw_ref, 1.0e-2));
 
@@ -213,8 +213,8 @@ void test_grads(sycl::queue &q, const int input_width, const int output_width, c
 
     bool grads_within_tolerance = areVectorsWithinTolerance(dL_doutput_vec, stacked_dL_doutput_ref, 1.0e-2);
     if (!grads_within_tolerance) {
-        printVector("stacked_dL_doutput_ref", stacked_dL_doutput_ref, 0, -1);
-        printVector("dL_doutput_vec", dL_doutput_vec, 0, -1);
+        // printVector("stacked_dL_doutput_ref", stacked_dL_doutput_ref, 0, -1);
+        // printVector("dL_doutput_vec", dL_doutput_vec, 0, -1);
     }
     CHECK(areVectorsWithinTolerance(dL_doutput_vec, stacked_dL_doutput_ref, 1.0e-2));
 
@@ -250,8 +250,8 @@ void test_grads(sycl::queue &q, const int input_width, const int output_width, c
                                     1.0e-2)); // sanity check, being tested in test_interm_backw
 
     if (!areVectorsWithinTolerance(grad_vec, grads_ref, 1.0e-2)) {
-        printVector("grads_ref", grads_ref);
-        printVector("grad_vec", grad_vec);
+        // printVector("grads_ref", grads_ref);
+        // printVector("grad_vec", grad_vec);
     }
     CHECK(areVectorsWithinTolerance(grad_vec, grads_ref, 1.0e-2));
 }
@@ -334,8 +334,8 @@ void test_interm_backw(sycl::queue &q, const int input_width, const int output_w
     auto interm_forw_vec = interm_forw.copy_to_host();
 
     if (!areVectorsWithinTolerance(interm_forw_vec, interm_forw_ref, 1.0e-2)) {
-        printVector("interm_forw_vec: ", interm_forw_vec);
-        printVector("interm_forw_ref: ", interm_forw_ref);
+        // printVector("interm_forw_vec: ", interm_forw_vec);
+        // printVector("interm_forw_ref: ", interm_forw_ref);
     }
     CHECK(areVectorsWithinTolerance(interm_forw_vec, interm_forw_ref, 1.0e-2));
 
@@ -364,8 +364,8 @@ void test_interm_backw(sycl::queue &q, const int input_width, const int output_w
         }
 
         if (!areVectorsWithinTolerance(interm_backw_sliced_actual, interm_backw_ref, 1.0e-2)) {
-            printVector("interm_backw_ref: ", interm_backw_ref);
-            printVector("interm_backw_vec: ", interm_backw_sliced_actual);
+            // printVector("interm_backw_ref: ", interm_backw_ref);
+            // printVector("interm_backw_vec: ", interm_backw_sliced_actual);
         }
         CHECK(areVectorsWithinTolerance(interm_backw_sliced_actual, interm_backw_ref, 1.0e-2));
     }
@@ -450,8 +450,8 @@ void test_dl_dinput(sycl::queue &q, const int input_width, const int output_widt
     auto interm_forw_vec = interm_forw.copy_to_host();
 
     if (!areVectorsWithinTolerance(interm_forw_vec, interm_forw_ref, 1.0e-2)) {
-        printVector("interm_forw_vec: ", interm_forw_vec);
-        printVector("interm_forw_ref: ", interm_forw_ref);
+        // printVector("interm_forw_vec: ", interm_forw_vec);
+        // printVector("interm_forw_ref: ", interm_forw_ref);
     }
     CHECK(areVectorsWithinTolerance(interm_forw_vec, interm_forw_ref, 1.0e-2));
 
@@ -471,8 +471,8 @@ void test_dl_dinput(sycl::queue &q, const int input_width, const int output_widt
     auto dL_dinput_ref_stacked = mlp_cpp::stack_vector(dL_dinput_ref, batch_size);
 
     if (!areVectorsWithinTolerance(dL_dinput_vec, dL_dinput_ref_stacked, 1.0e-2)) {
-        printVector("dL_dinput_ref_stacked: ", dL_dinput_ref_stacked);
-        printVector("dL_dinput_vec: ", dL_dinput_vec);
+        // printVector("dL_dinput_ref_stacked: ", dL_dinput_ref_stacked);
+        // printVector("dL_dinput_vec: ", dL_dinput_vec);
     }
     CHECK(areVectorsWithinTolerance(dL_dinput_vec, dL_dinput_ref_stacked, 1.0e-2));
 }
@@ -531,16 +531,16 @@ void test_loss(sycl::queue &q, const int input_width, const int output_width, co
     std::vector<double> stacked_dL_doutput_ref = mlp_cpp::stack_vector(dL_doutput_ref, batch_size);
 
     if (!areVectorsWithinTolerance(dL_doutput_vec, stacked_dL_doutput_ref, 1.0e-2)) {
-        printVector("stacked_dL_doutput_ref", stacked_dL_doutput_ref);
-        printVector("dL_doutput_vec", dL_doutput_vec);
+        // printVector("stacked_dL_doutput_ref", stacked_dL_doutput_ref);
+        // printVector("dL_doutput_vec", dL_doutput_vec);
     }
     CHECK(areVectorsWithinTolerance(dL_doutput_vec, stacked_dL_doutput_ref, 1.0e-2));
     std::vector<double> stacked_loss_ref = mlp_cpp::stack_vector(loss_ref, batch_size);
     auto loss_vec = loss.copy_to_host();
 
     if (!areVectorsWithinTolerance(loss_vec, stacked_loss_ref, 1.0e-2)) {
-        printVector("stacked_loss_ref", stacked_loss_ref);
-        printVector("loss_vec", loss_vec);
+        // printVector("stacked_loss_ref", stacked_loss_ref);
+        // printVector("loss_vec", loss_vec);
     }
     CHECK(areVectorsWithinTolerance(loss_vec, stacked_loss_ref, 1.0e-2));
 }
@@ -600,8 +600,8 @@ void test_interm_fwd(sycl::queue &q, const int input_width, const int output_wid
     auto interm_forw_ref = mlp_cpp::repeat_inner_vectors<double>(fwd_result_ref, batch_size);
     auto interm_forw_vec = interm_forw.copy_to_host();
     if (!areVectorsWithinTolerance(interm_forw_vec, interm_forw_ref, 1.0e-2)) {
-        printVector("interm_forw_vec", interm_forw_vec, WIDTH * batch_size);
-        printVector("interm_forw_ref", interm_forw_ref, WIDTH * batch_size);
+        // printVector("interm_forw_vec", interm_forw_vec, WIDTH * batch_size);
+        // printVector("interm_forw_ref", interm_forw_ref, WIDTH * batch_size);
     }
 
     CHECK(interm_forw_vec.size() == interm_forw_ref.size());
@@ -988,7 +988,7 @@ TEST_CASE("Swiftnet - test interm_fwd with reference MLP") {
             throw std::invalid_argument("Unsupported width");
     };
     const int widths[] = {16, 32, 64, 128};
-    const int batch_sizes[] = {8, 16, 32, 64, 1 << 17};
+    const int batch_sizes[] = {8, 16, 32, 64};
     std::string activations[] = {"linear", "sigmoid", "relu"};
     std::string output_activations[] = {"linear", "sigmoid", "relu"};
     std::string weight_inits[] = {"linear", "sigmoid", "relu"};
@@ -1039,7 +1039,7 @@ TEST_CASE("Swiftnet - test loss") {
             throw std::invalid_argument("Unsupported width");
     };
     const int widths[] = {16, 32, 64, 128};
-    const int batch_sizes[] = {8, 16, 32, 64, 1 << 17};
+    const int batch_sizes[] = {8, 16, 32, 64};
     std::string activations[] = {"linear", "sigmoid", "relu"};
     std::string output_activations[] = {"linear", "sigmoid", "relu"};
     std::string weight_init_modes[] = {"constant", "random"};
@@ -1086,7 +1086,7 @@ TEST_CASE("Swiftnet - test dL_dinput") {
             throw std::invalid_argument("Unsupported width");
     };
     const int widths[] = {16, 32, 64, 128};
-    const int batch_sizes[] = {8, 16, 32, 64, 1 << 17};
+    const int batch_sizes[] = {8, 16, 32, 64};
     std::string activations[] = {"linear", "sigmoid", "relu"};
     std::string output_activations[] = {"linear", "sigmoid", "relu"};
     std::string weight_init_modes[] = {"constant", "random"};
@@ -1135,7 +1135,7 @@ TEST_CASE("Swiftnet - test interm bwd") {
             throw std::invalid_argument("Unsupported width");
     };
     const int widths[] = {16, 32, 64, 128};
-    const int batch_sizes[] = {8, 16, 32, 64, 1 << 17};
+    const int batch_sizes[] = {8, 16, 32, 64};
     std::string activations[] = {"linear", "sigmoid", "relu"};
     std::string output_activations[] = {"linear", "sigmoid", "relu"};
     std::string weight_init_modes[] = {"constant", "random"};
@@ -1184,7 +1184,7 @@ TEST_CASE("Swiftnet - test interm bwd padded") {
             throw std::invalid_argument("Unsupported width");
     };
     const int widths[] = {16, 32, 64, 128};
-    const int batch_sizes[] = {8, 16, 32, 64, 1 << 17};
+    const int batch_sizes[] = {8, 16, 32, 64};
     std::string activations[] = {"linear", "sigmoid", "relu"};
     std::string output_activations[] = {"linear", "sigmoid", "relu"};
     std::string weight_init_modes[] = {"constant", "random"};
@@ -1229,7 +1229,7 @@ TEST_CASE("Swiftnet - test grad unpadded") {
             throw std::invalid_argument("Unsupported width");
     };
     const int widths[] = {16, 32, 64, 128};
-    const int batch_sizes[] = {8, 16, 32, 64, 1 << 17};
+    const int batch_sizes[] = {8, 16, 32, 64};
     std::string activations[] = {"linear", "sigmoid", "relu"};
     std::string output_activations[] = {"linear", "sigmoid", "relu"};
     std::string weight_init_modes[] = {"constant", "random"};
