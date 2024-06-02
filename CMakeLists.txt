@@ -21,6 +21,8 @@ option(BUILD_BENCHMARK "Build benchmarks in 'benchmark' directory" ON)
 option(BUILD_REF_TEST "Use reference tests from downloaded data for test" OFF)
 option(BUILD_DOCUMENTATION "Build the documentation which is online available" OFF)
 option(BUILD_EXAMPLE "Build the examples" OFF)
+
+set(IPEX_VERSION "2.1.30" CACHE STRING "The version of Intel Extension for PyTorch")
 set(TARGET_DEVICE "PVC" CACHE STRING "Valid values {PVC, ARC}")
 
 if (TARGET_DEVICE STREQUAL "PVC")
@@ -35,16 +37,6 @@ endif()
 
 message(WARNING "cmake build system is still WIP.")
 
-add_subdirectory(source)
-
-enable_testing()
-
-if(BUILD_PYBIND)
-    # Include Pybind11
-    add_subdirectory(extern/pybind11)
-    add_subdirectory(dpcpp_bindings)
-endif()
-
 # Check if either BUILD_PYBIND or BUILD_TORCH_TEST is ON
 if(BUILD_PYBIND OR BUILD_TORCH_TEST OR BUILD_TORCH_BENCHMARK)
     # Check if libtorch directory exists
@@ -52,13 +44,27 @@ if(BUILD_PYBIND OR BUILD_TORCH_TEST OR BUILD_TORCH_BENCHMARK)
         # Notify that we are downloading the necessary libtorch files
         message(STATUS "libtorch not found in ${PROJECT_SOURCE_DIR}/extern/. Downloading...")
 
+        # Determine the appropriate filenames based on the IPEX_VERSION
+        if(IPEX_VERSION VERSION_EQUAL "2.1.30")
+            set(LIBTORCH_FILENAME "libtorch-cxx11-abi-shared-with-deps-2.1.0.post2.zip")
+            set(LIBINTEL_EXT_FILENAME "libintel-ext-pt-cxx11-abi-2.1.30.post0.run")
+        elseif(IPEX_VERSION VERSION_EQUAL "2.1.20")
+            set(LIBTORCH_FILENAME "libtorch-cxx11-abi-shared-with-deps-2.1.0.post0.zip")
+            set(LIBINTEL_EXT_FILENAME "libintel-ext-pt-cxx11-abi-2.1.20+xpu.run")
+        elseif(IPEX_VERSION VERSION_EQUAL "2.1.10")
+            set(LIBTORCH_FILENAME "libtorch-cxx11-abi-shared-with-deps-2.1.0a0.zip")
+            set(LIBINTEL_EXT_FILENAME "libintel-ext-pt-cxx11-abi-2.1.10+xpu.run")
+        else()
+            message(FATAL_ERROR "Unsupported IPEX_VERSION: ${IPEX_VERSION}")
+        endif()
+
         # Set the URLs for the files to be downloaded
         set(LIBTORCH_URL "https://intel-extension-for-pytorch.s3.amazonaws.com/libipex/xpu/libtorch-cxx11-abi-shared-with-deps-2.1.0a0.zip")
         set(LIBINTEL_EXT_URL "https://intel-extension-for-pytorch.s3.amazonaws.com/libipex/xpu/libintel-ext-pt-cxx11-abi-2.1.10%2Bxpu.run")
 
-        # Set the filenames for the downloaded files
-        set(LIBTORCH_FILENAME "libtorch-cxx11-abi-shared-with-deps-2.1.0a0.zip")
-        set(LIBINTEL_EXT_FILENAME "libintel-ext-pt-cxx11-abi-2.1.10+xpu.run")
+        # Set the URLs for the files to be downloaded using the determined filenames
+        set(LIBTORCH_URL "https://intel-extension-for-pytorch.s3.amazonaws.com/libipex/xpu/${LIBTORCH_FILENAME}")
+        set(LIBINTEL_EXT_URL "https://intel-extension-for-pytorch.s3.amazonaws.com/libipex/xpu/${LIBINTEL_EXT_FILENAME}")
 
         # Download libtorch
         file(DOWNLOAD "${LIBTORCH_URL}" "${CMAKE_CURRENT_BINARY_DIR}/${LIBTORCH_FILENAME}"
@@ -96,6 +102,15 @@ if(BUILD_PYBIND OR BUILD_TORCH_TEST OR BUILD_TORCH_BENCHMARK)
     endif()
 endif()
 
+add_subdirectory(source)
+
+enable_testing()
+
+if(BUILD_PYBIND)
+    # Include Pybind11
+    add_subdirectory(extern/pybind11)
+    add_subdirectory(dpcpp_bindings)
+endif()
 
 if(BUILD_DOCUMENTATION)
     add_subdirectory(docs)

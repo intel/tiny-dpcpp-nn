@@ -96,11 +96,13 @@ Note: To make the use of the network, you have to disable the implicit scaling o
 
 We provide a pybind wrapper of our tiny-dpcpp-nn implementation for seamless integration into PyTorch. Please refer to [tiny-dpcpp-nn pybind documentation](https://intel.github.io/tiny-dpcpp-nn/manual/pytorch.html)
 
-Install the latest [ipex](https://intel.github.io/intel-extension-for-pytorch/index.html#installation?platform=gpu&version=v2.1.10%2Bxpu) via
+Install the latest [ipex](https://intel.github.io/intel-extension-for-pytorch/index.html#installation) via
 
 ```bash
-python -m pip install torch==2.1.0a0 torchvision==0.16.0a0 torchaudio==2.1.0a0 intel-extension-for-pytorch==2.1.10+xpu --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/xpu/us/
+python -m pip install torch==2.1.0.post2 torchvision==0.16.0.post2 torchaudio==2.1.0.post2 intel-extension-for-pytorch==2.1.30.post0 oneccl_bind_pt==2.1.300+xpu --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/xpu/us/
 ```
+
+*Note* please ensure that the IPEX version (2.1.30 in this example) is the same as used in `IPEX_VERSION` in `tiny-dpcpp-nn/CMakeLists.txt`
 
 ## Tests
 
