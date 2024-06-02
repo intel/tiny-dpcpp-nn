@@ -59,16 +59,16 @@ def from_packed_layout_coord(idx, rows, cols):
 
 class _module_function(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, native_tcnn_module, input, params, info):
+    def forward(ctx, native_tnn_module, input, params, info):
         batch_size = input.shape[0]
         if info["is_in_eval_mode"]:
-            output = native_tcnn_module.inference(input.to(params.dtype))
+            output = native_tnn_module.inference(input.to(params.dtype))
         else:
-            output = native_tcnn_module.fwd(input.to(params.dtype))
+            output = native_tnn_module.fwd(input.to(params.dtype))
         output = output.reshape(batch_size, -1).to(input.device)
         ctx.save_for_backward(input, output, params)
         ctx.info = info
-        ctx.native_tcnn_module = native_tcnn_module
+        ctx.native_tnn_module = native_tnn_module
         if "output_dim" in info:
             return output[
                 ..., : info["output_dim"]
@@ -106,7 +106,7 @@ class _module_function(torch.autograd.Function):
                 if "width" in ctx.info:
                     # this is NWE with grid encoding
                     pack_weights = True
-                    _, grad = ctx.native_tcnn_module.bwd_with_encoding_grad(
+                    _, grad = ctx.native_tnn_module.bwd_with_encoding_grad(
                         doutput,
                         input,
                         pack_weights,
@@ -115,7 +115,7 @@ class _module_function(torch.autograd.Function):
                 else:
                     pack_weights = False
                     # this is pure encoding module
-                    _, grad = ctx.native_tcnn_module.bwd_with_encoding_grad(
+                    _, grad = ctx.native_tnn_module.bwd_with_encoding_grad(
                         doutput,
                         input,
                         pack_weights,
@@ -123,7 +123,7 @@ class _module_function(torch.autograd.Function):
                     )
             else:
                 pack_weights = True
-                input_grad, grad = ctx.native_tcnn_module.bwd_no_encoding_grad(
+                input_grad, grad = ctx.native_tnn_module.bwd_no_encoding_grad(
                     doutput, pack_weights, True  # pack the grad, get dldinput
                 )
                 if input_grad is not None:
