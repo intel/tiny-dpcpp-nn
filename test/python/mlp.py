@@ -15,12 +15,10 @@ class MLP(torch.nn.Module):
         activation_func="relu",
         output_activation=None,
         use_batchnorm=False,
-        save_outputs=False,
         dtype=torch.float,
     ):
         super().__init__()
         self.dtype = dtype
-        self.save_outputs = save_outputs
         # Used for gradecheck and naming consistency with modules.py (Swiftnet)
         self.input_width = input_size
         self.output_width = output_size
@@ -74,7 +72,6 @@ class MLP(torch.nn.Module):
         )
         x_changed_dtype = torch.cat((x_changed_dtype, ones), dim=1)
 
-        layer_outputs = [x_changed_dtype[0, :].cpu().detach().numpy()[None,]]
         for i, layer in enumerate(self.layers):
             if i == len(self.layers) - 1:
                 x_changed_dtype = self._apply_activation(
@@ -84,17 +81,7 @@ class MLP(torch.nn.Module):
                 x_changed_dtype = self._apply_activation(
                     layer(x_changed_dtype), self.activation_func
                 )
-            layer_outputs.append(x_changed_dtype[0, :].cpu().detach().numpy()[None,])
 
-        if self.save_outputs:
-            # Specify the file path where you want to save the CSV file
-            file_path = "python/torch.csv"
-            np.savetxt(
-                file_path,
-                np.array(layer_outputs).squeeze(),
-                delimiter=",",
-                fmt="%f",
-            )
         return x_changed_dtype
 
     def _apply_activation(self, x, activation_func):

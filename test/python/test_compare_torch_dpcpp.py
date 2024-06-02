@@ -27,6 +27,7 @@ class CustomMSELoss(torch.nn.Module):
         mse = torch.mean((predicted - target) ** 2)
         return mse
 
+
 def train_model(model, x_train, y_train, n_steps):
     batch_size = BATCH_SIZE
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
@@ -44,7 +45,7 @@ def train_model(model, x_train, y_train, n_steps):
                 y_pred,
                 y_train[idx * batch_size : (idx + 1) * batch_size],
             ).to(DEVICE_NAME)
-            y_predicted_all.append(y_pred.detach().cpu().numpy())
+            y_predicted_all.append(y_pred.detach().cpu().to(torch.float))
             optimizer.zero_grad()
             loss.backward()
 
@@ -53,7 +54,7 @@ def train_model(model, x_train, y_train, n_steps):
             params.append(params_all)
 
             optimizer.step()
-            all_loss.append(loss.detach().cpu().numpy())
+            all_loss.append(loss.detach().cpu().to(torch.float))
         loss_mean = np.mean(np.array(all_loss))
         losses.append(loss_mean)
         # print(f"{n} - Loss: {loss_mean}")

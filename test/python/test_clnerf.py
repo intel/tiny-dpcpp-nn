@@ -53,7 +53,7 @@ tonemapper_net = Network(
 )
 
 sigma_mlp = Network(
-    n_input_dims=32 + 48,
+    n_input_dims=64,
     n_output_dims=16,
     network_config={
         "otype": "FullyFusedMLP",

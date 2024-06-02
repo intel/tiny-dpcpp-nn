@@ -90,20 +90,55 @@ where <options> are options that can be toggled on or off. See [Build Options](h
 
 Note: To make the use of the network, you have to disable the implicit scaling on PVC which can be done by uncommenting the portion of the code indicated in the sample when creating the queue.
 
-## Required Hardware and Software
-
 ## PyTorch extension
+### Installation
+We provide a pybind wrapper of our tiny-dpcpp-nn implementation for seamless integration into PyTorch. Please refer to [tiny-dpcpp-nn pybind documentation](https://intel.github.io/tiny-dpcpp-nn/manual/pytorch.html) for details.
 
-We provide a pybind wrapper of our tiny-dpcpp-nn implementation for seamless integration into PyTorch. Please refer to [tiny-dpcpp-nn pybind documentation](https://intel.github.io/tiny-dpcpp-nn/manual/pytorch.html)
+[Optional] - Load correct drivers, i.e., ensure that oneAPI and agama version match the required [IPEX version](https://intel.github.io/intel-extension-for-pytorch/index.html#installation)
+```bash
+module load intel-comp-rt/agama-ci-devel/803.29 intel/oneapi/2024.1 cmake/3.26.0
+```
+
+[Optional] - Create a conda environment
+```bash
+conda create -n tiny-dpcpp-nn python=3.10 -y
+conda activate tiny-dpcpp-nn
+```
 
 Install the latest [ipex](https://intel.github.io/intel-extension-for-pytorch/index.html#installation) via
 
 ```bash
-python -m pip install torch==2.1.0.post2 torchvision==0.16.0.post2 torchaudio==2.1.0.post2 intel-extension-for-pytorch==2.1.30.post0 oneccl_bind_pt==2.1.300+xpu --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/xpu/us/
+python -m pip install torch==2.1.0.post2 torchvision==0.16.0.post2 torchaudio==2.1.0.post2 intel-extension-for-pytorch==2.1.30+xpu oneccl_bind_pt==2.1.300+xpu --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/xpu/us/
 ```
 
 *Note* please ensure that the IPEX version (2.1.30 in this example) is the same as used in `IPEX_VERSION` in `tiny-dpcpp-nn/CMakeLists.txt`
 
+Install the module:
+```bash
+cd dpcpp_bindings
+pip install -e .
+```
+
+Finally, to test the sample scripts and tests, install the requirements:
+```bash
+cd python && pip install -r requirements.txt
+```
+### Test the install
+To test that the installation was successful, you can do the following four tests.
+
+```bash
+cd test/python/ && pytest
+```
+
+and run the two python sample scripts:
+
+```bash
+cd python && python benchmark_pytorch.py
+```
+
+```bash
+cd python && python mlp_learning_an_image_pytorch.py
+```
 ## Tests
 
 When setting the additional flag `BUILD_REF_TEST=ON`, additional data from [tiny-dpcpp-data](https://github.com/intel-sandbox/tiny-dpcpp-data) will be downloaded.
