@@ -45,6 +45,13 @@ class CMakeBuild(build_ext):
         # Set Python_EXECUTABLE instead if you use PYBIND11_FINDPYTHON
         # EXAMPLE_VERSION_INFO shows you how to pass a value into the C++ code
         # from Python.
+        target_device = os.environ.get("TARGET_DEVICE", "ARC")
+
+        # Validate TARGET_DEVICE
+        if target_device not in {"ARC", "PVC"}:
+            raise ValueError(
+                "TARGET_DEVICE environment variable must be either 'ARC', 'PVC'."
+            )
 
         cmake_args = [
             f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}{os.sep}",
@@ -52,6 +59,7 @@ class CMakeBuild(build_ext):
             f"-DCMAKE_BUILD_TYPE={cfg}",  # not used on MSVC, but no harm
             f"-DTORCH_CMAKE_PREFIX_PATH={torch.utils.cmake_prefix_path}",
             "-DCMAKE_CXX_FLAGS=-fPIC",
+            f"-DTARGET_DEVICE={target_device}",
             "-D BUILD_TEST=OFF",
             "-D BUILD_BENCHMARK=OFF",
             "-D BUILD_PYBIND=ON",

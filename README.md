@@ -118,10 +118,10 @@ python -m pip install torch==2.1.0.post2 torchvision==0.16.0.post2 torchaudio==2
 
 *Note* please ensure that the IPEX version (2.1.30 in this example) is the same as used in `IPEX_VERSION` in `tiny-dpcpp-nn/CMakeLists.txt`
 
-Install the module:
+Install the module (if no `TARGET_DEVICE` is set, the target_device in setup.py is set to `ARC`. Currently `PVC` and `ARC` is supported):
 ```bash
 cd dpcpp_bindings
-pip install -e .
+TARGET_DEVICE=ARC pip install -e .
 ```
 
 Finally, to test the sample scripts and tests, install the requirements:
@@ -138,11 +138,11 @@ cd test/python/ && pytest
 and run the two python sample scripts:
 
 ```bash
-cd python && python benchmark_pytorch.py
+cd samples && python benchmark_pytorch.py
 ```
 
 ```bash
-cd python && python mlp_learning_an_image_pytorch.py
+cd samples && python mlp_learning_an_image_pytorch.py
 ```
 ## Tests
 
