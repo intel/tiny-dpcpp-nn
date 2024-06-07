@@ -106,6 +106,10 @@ def write_image(file, img, quality=95):
             img[..., 0:3] = linear_to_srgb(img[..., 0:3])
         else:
             img = linear_to_srgb(img)
+
+        if img.shape[2] == 1:
+            img = np.repeat(img, 3, 2)
+
         write_image_imageio(file, img, quality)
 
 
