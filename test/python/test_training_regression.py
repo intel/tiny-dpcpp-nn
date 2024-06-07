@@ -12,6 +12,7 @@ CALC_REF = True
 USE_ADAM = True
 
 DTYPE = torch.bfloat16
+USE_NWE = True
 WIDTH = 16
 num_epochs = 100
 
@@ -82,7 +83,13 @@ dataloader = DataLoader(
 # Instantiate the network
 device = "xpu"
 model_dpcpp, model_torch = create_models(
-    input_size, [WIDTH], output_size, "relu", "linear", dtype=DTYPE
+    input_size,
+    [WIDTH],
+    output_size,
+    "relu",
+    "linear",
+    input_dtype=torch.float if USE_NWE else DTYPE,
+    backend_param_dtype=DTYPE,
 )
 
 model_torch.to(DTYPE).to("xpu")
@@ -195,5 +202,5 @@ plt.legend()
 plt.ylim(-1, 1)
 plt.tight_layout()
 
-# Save the figure instead of showing it
-plt.savefig("loss_and_function.png")
+# # Save the figure instead of showing it
+# plt.savefig("loss_and_function.png")
