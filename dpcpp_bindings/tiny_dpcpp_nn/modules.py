@@ -65,7 +65,12 @@ class _module_function(torch.autograd.Function):
             output = native_tnn_module.inference(input.to(params.dtype))
         else:
             output = native_tnn_module.fwd(input.to(params.dtype))
-        output = output.reshape(batch_size, -1).to(input.device)
+
+        if batch_size > 0:
+            output = output.reshape(batch_size, -1).to(input.device)
+        else:  # keep shape if we have an empty input tensor with batch_size==0
+            output = output.to(input.device)
+
         ctx.save_for_backward(input, output, params)
         ctx.info = info
         ctx.native_tnn_module = native_tnn_module
@@ -97,7 +102,10 @@ class _module_function(torch.autograd.Function):
         with torch.no_grad():
             if "encoding_config" in ctx.info:
                 input_grad = None
-                if "width" in ctx.info:
+
+                if batch_size == 0:
+                    grad = torch.zeros_like(params)
+                elif "width" in ctx.info:
                     # this is NWE with grid encoding
                     pack_weights = True
                     _, grad = ctx.native_tnn_module.bwd_with_encoding_grad(
