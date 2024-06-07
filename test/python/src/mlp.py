@@ -15,7 +15,7 @@ class MLP(torch.nn.Module):
         activation_func="relu",
         output_activation=None,
         use_batchnorm=False,
-        dtype=torch.float,
+        dtype=torch.bfloat16,
     ):
         super().__init__()
         self.dtype = dtype

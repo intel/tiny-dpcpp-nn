@@ -1,3 +1,4 @@
+import pytest
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -11,6 +12,8 @@ WIDTH = 64
 TRAIN_EPOCHS = 1000  # this is high to ensure that all tests pass (some are fast < 100 and some are slow)
 
 PRINT_PROGRESS = True
+
+dtypes = [torch.float16, torch.bfloat16]
 
 
 def generate_data(num_samples, input_size, output_size):
@@ -58,13 +61,17 @@ def evaluate(model, data, labels):
     return accuracy
 
 
-def test_network():
+@pytest.mark.parametrize(
+    "dtype",
+    [dtype for dtype in dtypes],
+)
+def test_network(dtype):
     # Test network
     # Hyperparameters
-    input_size = 10
+    input_size = WIDTH
     hidden_size = WIDTH
     hidden_layers = 2
-    output_size = 10
+    output_size = WIDTH
     num_samples = BATCH_SIZE
     learning_rate = 0.01
     epochs = TRAIN_EPOCHS
@@ -80,6 +87,8 @@ def test_network():
         n_input_dims=input_size,
         n_output_dims=output_size,
         network_config=network_config,
+        input_dtype=dtype,
+        backend_param_dtype=dtype,
     )
     # Generate dummy data
     X, y = generate_data(num_samples, input_size, output_size)
@@ -124,7 +133,8 @@ def test_encoding():
         n_input_dims=input_size,
         encoding_config=encoding_config,
         device="xpu",
-        dtype=torch.float,
+        input_dtype=torch.float,
+        backend_param_dtype=torch.float,
     )
 
     # Generate dummy data
@@ -148,6 +158,7 @@ def test_encoding():
 
 def run_test_network_with_custom_encoding(
     encoding_config,
+    dtype,
     input_size,
     hidden_size,
     hidden_layers,
@@ -162,7 +173,8 @@ def run_test_network_with_custom_encoding(
             n_input_dims=input_size,
             encoding_config=encoding_config,
             device="xpu",
-            dtype=torch.float,
+            input_dtype=torch.float,
+            backend_param_dtype=torch.float,
         )
         network = Network(
             n_input_dims=encoding.n_output_dims,
@@ -173,6 +185,8 @@ def run_test_network_with_custom_encoding(
                 "n_neurons": hidden_size,
                 "n_hidden_layers": hidden_layers,
             },
+            input_dtype=dtype,
+            backend_param_dtype=dtype,
         )
         nwe = torch.nn.Sequential(encoding, network).to("xpu")
     else:
@@ -187,7 +201,8 @@ def run_test_network_with_custom_encoding(
             },
             encoding_config=encoding_config,
             device="xpu",
-            dtype=torch.float,
+            input_dtype=torch.float,
+            backend_param_dtype=dtype,
         )
     # Generate dummy data
     X, y = generate_data(num_samples, input_size, output_size)
@@ -209,7 +224,11 @@ def run_test_network_with_custom_encoding(
     )  # Adjusted expectation as perfect accuracy may not be realistic
 
 
-def test_network_with_encoding_all():
+@pytest.mark.parametrize(
+    "dtype",
+    [dtype for dtype in dtypes],
+)
+def test_network_with_encoding_all(dtype):
     input_size = 3
     spherical_harmonics_config = {
         "otype": "SphericalHarmonics",
@@ -246,40 +265,42 @@ def test_network_with_encoding_all():
 
     print("Testing identity separate")
     run_test_network_with_custom_encoding(
-        identity_config, separate=True, **hyper_parameters
+        identity_config, dtype, separate=True, **hyper_parameters
     )
 
     print("Testing spherical separate")
     run_test_network_with_custom_encoding(
-        spherical_harmonics_config, separate=True, **hyper_parameters
+        spherical_harmonics_config, dtype, separate=True, **hyper_parameters
     )
 
     print("Testing grid separate")
     run_test_network_with_custom_encoding(
-        grid_config, separate=True, **hyper_parameters
+        grid_config, dtype, separate=True, **hyper_parameters
     )
 
     print("Testing identity nwe")
     run_test_network_with_custom_encoding(
-        identity_config, separate=False, **hyper_parameters
+        identity_config, dtype, separate=False, **hyper_parameters
     )
 
     print("Testing spherical nwe")
     run_test_network_with_custom_encoding(
-        spherical_harmonics_config, separate=False, **hyper_parameters
+        spherical_harmonics_config, dtype, separate=False, **hyper_parameters
     )
 
     print("Testing grid nwe")
     run_test_network_with_custom_encoding(
-        grid_config, separate=False, **hyper_parameters
+        grid_config, dtype, separate=False, **hyper_parameters
     )
 
 
 if __name__ == "__main__":
+    dtype = torch.bfloat16
+    # dtype = torch.float16
     print("Testing network")
-    test_network()
+    test_network(dtype)
 
     print("Testing encoding")
     test_encoding()
 
-    test_network_with_encoding_all()
+    test_network_with_encoding_all(dtype)
