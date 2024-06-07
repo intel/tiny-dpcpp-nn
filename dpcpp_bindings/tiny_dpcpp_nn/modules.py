@@ -95,10 +95,7 @@ class _module_function(torch.autograd.Function):
         doutput = doutput * loss_scale
 
         with torch.no_grad():
-            if (
-                "encoding_config" in ctx.info
-                and ctx.info["encoding_config"]["otype"] == "Grid"
-            ):
+            if "encoding_config" in ctx.info:
                 input_grad = None
                 if "width" in ctx.info:
                     # this is NWE with grid encoding
