@@ -59,16 +59,21 @@ def from_packed_layout_coord(idx, rows, cols):
 
 class _module_function(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, native_tcnn_module, input, params, info):
+    def forward(ctx, native_tnn_module, input, params, info):
         batch_size = input.shape[0]
         if info["is_in_eval_mode"]:
-            output = native_tcnn_module.inference(input.to(params.dtype))
+            output = native_tnn_module.inference(input.to(params.dtype))
         else:
-            output = native_tcnn_module.fwd(input.to(params.dtype))
-        output = output.reshape(batch_size, -1).to(input.device)
+            output = native_tnn_module.fwd(input.to(params.dtype))
+
+        if batch_size > 0:
+            output = output.reshape(batch_size, -1).to(input.device)
+        else:  # keep shape if we have an empty input tensor with batch_size==0
+            output = output.to(input.device)
+
         ctx.save_for_backward(input, output, params)
         ctx.info = info
-        ctx.native_tcnn_module = native_tcnn_module
+        ctx.native_tnn_module = native_tnn_module
         if "output_dim" in info:
             return output[
                 ..., : info["output_dim"]
@@ -79,9 +84,6 @@ class _module_function(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, doutput):
-        # assert (
-        #     doutput.shape[0] <= 2**10
-        # ), "there currently is an mkl bug batch size > 2**10, the values are 64 smaller, consider increasing learning rate due to this."
         input, _, params = ctx.saved_tensors
         if "width" in ctx.info:
             doutput = torch.hstack(
@@ -98,15 +100,15 @@ class _module_function(torch.autograd.Function):
         doutput = doutput * loss_scale
 
         with torch.no_grad():
-            if (
-                "encoding_config" in ctx.info
-                and ctx.info["encoding_config"]["otype"] == "Grid"
-            ):
+            if "encoding_config" in ctx.info:
                 input_grad = None
-                if "width" in ctx.info:
+
+                if batch_size == 0:
+                    grad = torch.zeros_like(params)
+                elif "width" in ctx.info:
                     # this is NWE with grid encoding
                     pack_weights = True
-                    _, grad = ctx.native_tcnn_module.bwd_with_encoding_grad(
+                    _, grad = ctx.native_tnn_module.bwd_with_encoding_grad(
                         doutput,
                         input,
                         pack_weights,
@@ -115,7 +117,7 @@ class _module_function(torch.autograd.Function):
                 else:
                     pack_weights = False
                     # this is pure encoding module
-                    _, grad = ctx.native_tcnn_module.bwd_with_encoding_grad(
+                    _, grad = ctx.native_tnn_module.bwd_with_encoding_grad(
                         doutput,
                         input,
                         pack_weights,
@@ -123,7 +125,7 @@ class _module_function(torch.autograd.Function):
                     )
             else:
                 pack_weights = True
-                input_grad, grad = ctx.native_tcnn_module.bwd_no_encoding_grad(
+                input_grad, grad = ctx.native_tnn_module.bwd_no_encoding_grad(
                     doutput, pack_weights, True  # pack the grad, get dldinput
                 )
                 if input_grad is not None:
@@ -309,21 +311,13 @@ class Module(torch.nn.Module):
 class Network(Module):
     def __init__(
         self,
-        n_input_dims=1,
-        n_output_dims=1,
-        network_config=None,
+        n_input_dims,
+        n_output_dims,
+        network_config,
         device="xpu",
         dtype=torch.bfloat16,
     ):
-        if network_config is None:
-            self.network_config = {
-                "activation": "ReLU",
-                "output_activation": "None",
-                "n_neurons": 64,
-                "n_hidden_layers": 1,
-            }
-        else:
-            self.network_config = network_config
+        self.network_config = network_config
 
         self.width = self.network_config["n_neurons"]
         self.n_input_dims = n_input_dims
@@ -350,22 +344,14 @@ class Network(Module):
 class NetworkWithInputEncoding(Module):
     def __init__(
         self,
-        n_input_dims=1,
-        n_output_dims=1,
-        network_config=None,
-        encoding_config=None,
+        n_input_dims,
+        n_output_dims,
+        network_config,
+        encoding_config,
         device="xpu",
         dtype=torch.bfloat16,
     ):
-        if network_config is None:
-            self.network_config = {
-                "activation": "ReLU",
-                "output_activation": "None",
-                "n_neurons": 64,
-                "n_hidden_layers": 1,
-            }
-        else:
-            self.network_config = network_config
+        self.network_config = network_config
 
         self.width = self.network_config["n_neurons"]
         self.n_input_dims = n_input_dims
@@ -378,13 +364,6 @@ class NetworkWithInputEncoding(Module):
         self.name = "network_with_encoding"
 
         self.encoding_config = encoding_config
-        if self.encoding_config is None:
-            self.encoding_config = {
-                "otype": "Identity",
-                "n_dims_to_encode": self.n_input_dims,
-                "scale": 1.0,
-                "offset": 0.0,
-            }
         self.encoding_name = self.encoding_config["otype"]
 
         if "n_dims_to_encode" not in self.encoding_config:
@@ -408,21 +387,15 @@ class NetworkWithInputEncoding(Module):
 class Encoding(Module):
     def __init__(
         self,
-        n_input_dims=1,
-        encoding_config=None,
+        n_input_dims,
+        encoding_config,
         device="xpu",
         dtype=torch.float,
     ):
         self.n_input_dims = n_input_dims
 
         self.encoding_config = encoding_config
-        if self.encoding_config is None:
-            self.encoding_config = {
-                "otype": "Identity",
-                "n_dims_to_encode": self.n_input_dims,
-                "scale": 1.0,
-                "offset": 0.0,
-            }
+
         self.encoding_name = self.encoding_config["otype"]
         self.name = "encoding"
 

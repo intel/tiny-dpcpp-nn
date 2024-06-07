@@ -2,16 +2,13 @@ import torch
 import intel_extension_for_pytorch
 from torch.utils.data import DataLoader, TensorDataset
 import matplotlib.pyplot as plt
-from utils import create_models
+from src.utils import create_models
 
 torch.set_printoptions(precision=10)
 
-# CALC_DPCPP = False
 CALC_DPCPP = True
 CALC_REF = True
-# CALC_REF = False
 
-# USE_ADAM = False
 USE_ADAM = True
 
 DTYPE = torch.bfloat16
@@ -166,8 +163,8 @@ plt.legend()
 # Plot the ground truth and the learned function
 plt.subplot(1, 2, 2)
 plt.scatter(
-    inputs_training.cpu().numpy()[:, 0],
-    labels_training.cpu().numpy()[:, 0],
+    inputs_training.cpu().to(torch.float)[:, 0],
+    labels_training.cpu().to(torch.float)[:, 0],
     s=8,
     label="Ground Truth",
 )
@@ -177,8 +174,8 @@ if CALC_DPCPP:
     # print(inputs1.shape)
     # print(learned_function_dpcpp.shape)
     plt.scatter(
-        inputs_training.cpu().numpy()[:, 0],
-        learned_function_dpcpp.cpu().numpy()[:, 0],
+        inputs_training.cpu().to(torch.float)[:, 0],
+        learned_function_dpcpp.cpu().to(torch.float)[:, 0],
         s=8,
         label="Learned Function dpcpp",
     )
@@ -186,8 +183,8 @@ if CALC_REF:
     with torch.no_grad():
         learned_function_torch = model_torch(inputs_training.to(device)).cpu()
     plt.scatter(
-        inputs_training.cpu().numpy()[:, 0],
-        learned_function_torch.cpu().numpy()[:, 0],
+        inputs_training.cpu().to(torch.float)[:, 0],
+        learned_function_torch.cpu().to(torch.float)[:, 0],
         s=8,
         label="Learned Function torch",
     )

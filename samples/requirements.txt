@@ -1,0 +1,4 @@
+pytest
+commentjson
+imageio==2.19.3
+matplotlib

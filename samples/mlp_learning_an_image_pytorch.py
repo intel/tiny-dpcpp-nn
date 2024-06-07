@@ -48,7 +48,7 @@ except ImportError:
     print("============================================================")
     sys.exit()
 
-from common import read_image, write_image, ROOT_DIR
+from src.common import read_image, write_image, ROOT_DIR
 
 DATA_DIR = os.path.join(ROOT_DIR, "data")
 IMAGES_DIR = os.path.join(DATA_DIR, "images")
@@ -221,7 +221,13 @@ if __name__ == "__main__":
             with torch.no_grad():
                 write_image(
                     path,
-                    model(xy).reshape(img_shape).clamp(0.0, 1.0).detach().cpu().numpy(),
+                    model(xy)
+                    .reshape(img_shape)
+                    .clamp(0.0, 1.0)
+                    .detach()
+                    .cpu()
+                    .to(torch.float)
+                    .numpy(),
                 )
             print("done.")
 
@@ -236,6 +242,12 @@ if __name__ == "__main__":
         with torch.no_grad():
             write_image(
                 args.result_filename,
-                model(xy).reshape(img_shape).clamp(0.0, 1.0).detach().cpu().numpy(),
+                model(xy)
+                .reshape(img_shape)
+                .clamp(0.0, 1.0)
+                .detach()
+                .cpu()
+                .to(torch.float)
+                .numpy(),
             )
         print("done.")
