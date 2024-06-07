@@ -1,4 +1,4 @@
-from mlp_benchmark import MLP
+from src.mlp_benchmark import MLP
 
 import torch
 import numpy as np

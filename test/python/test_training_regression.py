@@ -2,7 +2,7 @@ import torch
 import intel_extension_for_pytorch
 from torch.utils.data import DataLoader, TensorDataset
 import matplotlib.pyplot as plt
-from utils import create_models
+from src.utils import create_models
 
 torch.set_printoptions(precision=10)
 

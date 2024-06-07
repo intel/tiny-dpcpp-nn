@@ -48,7 +48,7 @@ except ImportError:
     print("============================================================")
     sys.exit()
 
-from common import read_image, write_image, ROOT_DIR
+from src.common import read_image, write_image, ROOT_DIR
 
 DATA_DIR = os.path.join(ROOT_DIR, "data")
 IMAGES_DIR = os.path.join(DATA_DIR, "images")

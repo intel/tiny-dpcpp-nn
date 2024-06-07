@@ -94,6 +94,11 @@ Note: To make the use of the network, you have to disable the implicit scaling o
 ### Installation
 We provide a pybind wrapper of our tiny-dpcpp-nn implementation for seamless integration into PyTorch. Please refer to [tiny-dpcpp-nn pybind documentation](https://intel.github.io/tiny-dpcpp-nn/manual/pytorch.html) for details.
 
+Please recursively pull the `pybind11` library:
+```bash
+git submodule update --init -- extern/pybind11
+```
+
 [Optional] - Load correct drivers, i.e., ensure that oneAPI and agama version match the required [IPEX version](https://intel.github.io/intel-extension-for-pytorch/index.html#installation)
 ```bash
 module load intel-comp-rt/agama-ci-devel/803.29 intel/oneapi/2024.1 cmake/3.26.0
