@@ -79,9 +79,6 @@ class _module_function(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, doutput):
-        # assert (
-        #     doutput.shape[0] <= 2**10
-        # ), "there currently is an mkl bug batch size > 2**10, the values are 64 smaller, consider increasing learning rate due to this."
         input, _, params = ctx.saved_tensors
         if "width" in ctx.info:
             doutput = torch.hstack(
@@ -309,21 +306,13 @@ class Module(torch.nn.Module):
 class Network(Module):
     def __init__(
         self,
-        n_input_dims=1,
-        n_output_dims=1,
-        network_config=None,
+        n_input_dims,
+        n_output_dims,
+        network_config,
         device="xpu",
         dtype=torch.bfloat16,
     ):
-        if network_config is None:
-            self.network_config = {
-                "activation": "ReLU",
-                "output_activation": "None",
-                "n_neurons": 64,
-                "n_hidden_layers": 1,
-            }
-        else:
-            self.network_config = network_config
+        self.network_config = network_config
 
         self.width = self.network_config["n_neurons"]
         self.n_input_dims = n_input_dims
@@ -350,22 +339,14 @@ class Network(Module):
 class NetworkWithInputEncoding(Module):
     def __init__(
         self,
-        n_input_dims=1,
-        n_output_dims=1,
-        network_config=None,
-        encoding_config=None,
+        n_input_dims,
+        n_output_dims,
+        network_config,
+        encoding_config,
         device="xpu",
         dtype=torch.bfloat16,
     ):
-        if network_config is None:
-            self.network_config = {
-                "activation": "ReLU",
-                "output_activation": "None",
-                "n_neurons": 64,
-                "n_hidden_layers": 1,
-            }
-        else:
-            self.network_config = network_config
+        self.network_config = network_config
 
         self.width = self.network_config["n_neurons"]
         self.n_input_dims = n_input_dims
@@ -378,13 +359,6 @@ class NetworkWithInputEncoding(Module):
         self.name = "network_with_encoding"
 
         self.encoding_config = encoding_config
-        if self.encoding_config is None:
-            self.encoding_config = {
-                "otype": "Identity",
-                "n_dims_to_encode": self.n_input_dims,
-                "scale": 1.0,
-                "offset": 0.0,
-            }
         self.encoding_name = self.encoding_config["otype"]
 
         if "n_dims_to_encode" not in self.encoding_config:
@@ -408,21 +382,15 @@ class NetworkWithInputEncoding(Module):
 class Encoding(Module):
     def __init__(
         self,
-        n_input_dims=1,
-        encoding_config=None,
+        n_input_dims,
+        encoding_config,
         device="xpu",
         dtype=torch.float,
     ):
         self.n_input_dims = n_input_dims
 
         self.encoding_config = encoding_config
-        if self.encoding_config is None:
-            self.encoding_config = {
-                "otype": "Identity",
-                "n_dims_to_encode": self.n_input_dims,
-                "scale": 1.0,
-                "offset": 0.0,
-            }
+
         self.encoding_name = self.encoding_config["otype"]
         self.name = "encoding"
 
