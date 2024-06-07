@@ -58,10 +58,6 @@ if(BUILD_PYBIND OR BUILD_TORCH_TEST OR BUILD_TORCH_BENCHMARK)
             message(FATAL_ERROR "Unsupported IPEX_VERSION: ${IPEX_VERSION}")
         endif()
 
-        # Set the URLs for the files to be downloaded
-        set(LIBTORCH_URL "https://intel-extension-for-pytorch.s3.amazonaws.com/libipex/xpu/libtorch-cxx11-abi-shared-with-deps-2.1.0a0.zip")
-        set(LIBINTEL_EXT_URL "https://intel-extension-for-pytorch.s3.amazonaws.com/libipex/xpu/libintel-ext-pt-cxx11-abi-2.1.10%2Bxpu.run")
-
         # Set the URLs for the files to be downloaded using the determined filenames
         set(LIBTORCH_URL "https://intel-extension-for-pytorch.s3.amazonaws.com/libipex/xpu/${LIBTORCH_FILENAME}")
         set(LIBINTEL_EXT_URL "https://intel-extension-for-pytorch.s3.amazonaws.com/libipex/xpu/${LIBINTEL_EXT_FILENAME}")
