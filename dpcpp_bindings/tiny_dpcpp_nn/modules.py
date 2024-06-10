@@ -177,7 +177,6 @@ class Module(torch.nn.Module):
             )
         elif self.tnn_module.n_params():
             initial_params = self.tnn_module.initial_params()
-
             # Creating the torch.nn.Parameter object with the initialized tensor
             self.params = torch.nn.Parameter(
                 initial_params.to(device), requires_grad=True
@@ -189,6 +188,12 @@ class Module(torch.nn.Module):
             self.params = torch.nn.Parameter(torch.zeros(1), requires_grad=False).to(
                 self.device
             )
+
+    def set_params(self, params):
+        assert isinstance(params, torch.Tensor), "Params is not a torch.Tensor"
+        if len(params.shape) > 1:
+            params = params.flatten()
+        self.tnn_module.set_params(params, False)
 
     def get_reshaped_params(
         self,

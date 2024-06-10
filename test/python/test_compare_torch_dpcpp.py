@@ -11,10 +11,12 @@ output_funcs = ["linear", "sigmoid"]
 output_sizes = [1, 2, 4, 8, 16]
 activation_funcs = ["relu", "linear", "sigmoid"]
 hidden_layer_counts = [1, 2, 4]
-# dtypes = [torch.float16, torch.bfloat16]
-dtypes = [torch.bfloat16]
+dtypes = [torch.float16, torch.bfloat16]
+# dtypes = [torch.bfloat16]
 hidden_sizes = [16, 32, 64, 128]
-use_nwe_array = [False, True]
+# use_nwe_array = [False, True]
+use_nwe_array = [False]
+use_weights_of_tinynn_array = [False, True]
 BATCH_SIZE = 2**10
 DEVICE_NAME = "xpu"
 
@@ -64,7 +66,7 @@ def train_model(model, x_train, y_train, n_steps):
 
 
 @pytest.mark.parametrize(
-    "input_size, hidden_size, hidden_layers, output_size, activation_func, output_func, dtype, use_nwe",
+    "input_size, hidden_size, hidden_layers, output_size, activation_func, output_func, dtype, use_nwe, use_weights_of_tinynn",
     [
         (
             input_size,
@@ -75,6 +77,7 @@ def train_model(model, x_train, y_train, n_steps):
             output_func,
             dtype,
             use_nwe,
+            use_weights_of_tinynn,
         )
         for input_size in input_sizes
         for hidden_layers in hidden_layer_counts
@@ -84,6 +87,7 @@ def train_model(model, x_train, y_train, n_steps):
         for output_func in output_funcs
         for dtype in dtypes
         for use_nwe in use_nwe_array
+        for use_weights_of_tinynn in use_weights_of_tinynn_array
     ],
 )
 def test_grad(
@@ -95,6 +99,7 @@ def test_grad(
     output_func,
     dtype,
     use_nwe,
+    use_weights_of_tinynn,
     iterations=1,
     n_steps=1,  # if this is too large, there will be accumulated error (weights aren't the same, thus the loss is not the same etc)
 ):
@@ -124,6 +129,7 @@ def test_grad(
             input_dtype=torch.float if use_nwe else dtype,
             backend_param_dtype=dtype,
             use_nwe=use_nwe,
+            use_weights_of_tinynn=use_weights_of_tinynn,
         )
 
         loss_dpcpp, y_dpcpp, grads_dpcpp, params_dpcpp = train_model(
@@ -153,7 +159,7 @@ def test_grad(
 
 
 @pytest.mark.parametrize(
-    "input_size, hidden_size, hidden_layers, output_size, activation_func, output_func, dtype, use_nwe",
+    "input_size, hidden_size, hidden_layers, output_size, activation_func, output_func, dtype, use_nwe, use_weights_of_tinynn",
     [
         (
             input_size,
@@ -164,6 +170,7 @@ def test_grad(
             output_func,
             dtype,
             use_nwe,
+            use_weights_of_tinynn,
         )
         for input_size in input_sizes
         for hidden_layers in hidden_layer_counts
@@ -173,6 +180,7 @@ def test_grad(
         for output_func in output_funcs
         for dtype in dtypes
         for use_nwe in use_nwe_array
+        for use_weights_of_tinynn in use_weights_of_tinynn_array
     ],
 )
 def test_fwd(
@@ -184,6 +192,7 @@ def test_fwd(
     output_func,
     dtype,
     use_nwe,
+    use_weights_of_tinynn,
 ):
     # Generate random input data for testing
     torch.manual_seed(123)
@@ -197,6 +206,7 @@ def test_fwd(
         input_dtype=torch.float if use_nwe else dtype,
         backend_param_dtype=dtype,
         use_nwe=use_nwe,
+        use_weights_of_tinynn=use_weights_of_tinynn,
     )
     model_torch.to(DEVICE_NAME)
     model_dpcpp.to(DEVICE_NAME)
@@ -223,13 +233,15 @@ if __name__ == "__main__":
     input_width = 2
     hidden_size = 16
     hidden_layers = 1
-    output_width = 2
-    # activation_func = "sigmoid"
+    output_width = 1
     activation_func = "sigmoid"
-    output_func = "relu"
+    # activation_func = "relu"
+    output_func = "linear"
     # output_func = "sigmoid"
     dtype = torch.bfloat16
-    use_nwe = True
+    use_nwe = False
+    use_weights_of_tinynn = True
+
     test_fwd(
         input_width,
         hidden_size,
@@ -239,6 +251,7 @@ if __name__ == "__main__":
         output_func,
         dtype,
         use_nwe,
+        use_weights_of_tinynn,
     )
     print("Passed fwd test")
 
@@ -251,5 +264,6 @@ if __name__ == "__main__":
         output_func,
         dtype,
         use_nwe,
+        use_weights_of_tinynn,
     )
     print("Passed bwd test")

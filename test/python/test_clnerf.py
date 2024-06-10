@@ -1,15 +1,16 @@
 import pytest
 import numpy as np
-
+import torch
 from tiny_dpcpp_nn import Encoding, Network, NetworkWithInputEncoding
 
 dtypes = [torch.float16, torch.bfloat16]
+
 
 @pytest.mark.parametrize(
     "dtype",
     [dtype for dtype in dtypes],
 )
-test_constructor(dtype):
+def test_constructor(dtype):
     scale = 1
     N_min = 16
     L = 16
@@ -34,7 +35,8 @@ test_constructor(dtype):
             "n_neurons": 64,
             "n_hidden_layers": 1,
         },
-        dtype=dtype
+        input_dtype=torch.float,
+        backend_param_dtype=dtype,
     )
 
     rgb_net = Network(
@@ -47,7 +49,8 @@ test_constructor(dtype):
             "n_neurons": 64,
             "n_hidden_layers": 2,
         },
-        dtype=dtype
+        input_dtype=dtype,
+        backend_param_dtype=dtype,
     )
 
     tonemapper_net = Network(
@@ -60,7 +63,8 @@ test_constructor(dtype):
             "n_neurons": 64,
             "n_hidden_layers": 1,
         },
-        dtype=dtype
+        input_dtype=dtype,
+        backend_param_dtype=dtype,
     )
 
     sigma_mlp = Network(
@@ -73,7 +77,8 @@ test_constructor(dtype):
             "n_neurons": 64,
             "n_hidden_layers": 1,
         },
-        dtype=dtype
+        input_dtype=dtype,
+        backend_param_dtype=dtype,
     )
 
     dir_encoder = Encoding(

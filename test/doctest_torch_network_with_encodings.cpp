@@ -52,10 +52,7 @@ void test_network_with_encoding_backward(sycl::queue &q, const int input_width, 
                                                             network_activation, Activation::None, encoding_config);
 
     std::vector<T_net> unpacked_weights = mlp_cpp::convert_vector<float, T_net>(mlp.getUnpackedWeights());
-    auto network_torch_params =
-        tnn::Module::convertVectorToTensor<T_net>(
-            io::get_packed_weights<T_net, WIDTH>(unpacked_weights, n_hidden_layers, input_width, WIDTH))
-            .to(torch::kFloat32);
+    auto network_torch_params = tnn::Module::convertVectorToTensor<T_net>(unpacked_weights).to(torch::kFloat32);
     torch::Tensor torch_params = network_torch_params;
     Net.initialize_params(torch_params);
     auto output_net = Net.forward_pass(torch::ones({batch_size, input_width}).to(torch::kXPU) * input_val);

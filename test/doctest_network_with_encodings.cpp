@@ -400,9 +400,7 @@ void test_network_with_encoding_identity_forward(sycl::queue &q, const int input
                             n_hidden_layers + 1, batch_size, activation, "linear", weight_init_mode);
     std::vector<T> unpacked_weights = mlp_cpp::convert_vector<float, T>(mlp.getUnpackedWeights());
 
-    Net->get_network()->set_weights_matrices(io::get_packed_weights<T, WIDTH>(unpacked_weights, n_hidden_layers,
-                                                                              Net->get_network()->get_input_width(),
-                                                                              Net->get_network()->get_output_width()));
+    Net->get_network()->set_weights_matrices(unpacked_weights, false);
 
     DeviceMatrix<float> input_encoding(batch_size, input_width, q);
 
@@ -464,9 +462,7 @@ void test_network_with_encoding_backward(sycl::queue &q, const int input_width, 
                                                              Activation::None, encoding_config);
 
     std::vector<T> unpacked_weights = mlp_cpp::convert_vector<float, T>(mlp.getUnpackedWeights());
-    Net->get_network()->set_weights_matrices(io::get_packed_weights<T, WIDTH>(unpacked_weights, n_hidden_layers,
-                                                                              Net->get_network()->get_input_width(),
-                                                                              Net->get_network()->get_output_width()));
+    Net->get_network()->set_weights_matrices(unpacked_weights, false);
 
     std::vector<mlp_cpp::Matrix<float>> grad_matrices_ref(n_hidden_layers + 1, mlp_cpp::Matrix<float>(1, 1));
     std::vector<std::vector<float>> loss_grads_ref;

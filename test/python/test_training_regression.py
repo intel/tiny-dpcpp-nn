@@ -91,6 +91,7 @@ model_dpcpp, model_torch = create_models(
     use_nwe=USE_NWE,
     input_dtype=torch.float if USE_NWE else DTYPE,
     backend_param_dtype=DTYPE,
+    use_weights_of_tinynn=True,
 )
 
 model_torch.to(DTYPE).to("xpu")
