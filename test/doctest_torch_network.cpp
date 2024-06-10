@@ -64,10 +64,7 @@ void test_network_backward(sycl::queue &q, const int input_width, const int outp
     tnn::NetworkModule<T, WIDTH> Net(input_width, output_width, n_hidden_layers, network_activation, Activation::None);
 
     std::vector<T> unpacked_weights = mlp_cpp::convert_vector<T_ref, T>(mlp.getUnpackedWeights());
-    auto network_torch_params =
-        tnn::Module::convertVectorToTensor<T>(io::get_packed_weights<T, WIDTH>(unpacked_weights, n_hidden_layers,
-                                                                               padded_input_width, padded_output_width))
-            .to(c10::ScalarType::BFloat16);
+    auto network_torch_params = tnn::Module::convertVectorToTensor<T>(unpacked_weights).to(c10::ScalarType::BFloat16);
     torch::Tensor torch_params = network_torch_params;
     auto params = Net.initialize_params(torch_params);
 

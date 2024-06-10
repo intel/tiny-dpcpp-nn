@@ -64,6 +64,7 @@ def create_models(
     input_dtype,
     backend_param_dtype,
     use_nwe,
+    use_weights_of_tinynn,
 ):
 
     # Create and test CustomMLP
@@ -110,10 +111,14 @@ def create_models(
             backend_param_dtype=backend_param_dtype,
         )
 
-    weights = model_dpcpp.get_reshaped_params()
-    model_torch.set_weights(weights)
+    if use_weights_of_tinynn:
+        weights = model_dpcpp.get_reshaped_params()
+        model_torch.set_weights(weights)
+    else:
+        weights = model_torch.get_all_weights()
+        model_dpcpp.set_params(weights)
 
     grads_dpcpp, params_dpcpp = get_grad_params(model_dpcpp)
-    grads_torch, params_torch = get_grad_params(model_torch)
+    grads_torch, params_torch = get_grad_params(model_torch.to(model_dpcpp.device))
     compare_matrices(params_dpcpp[0], params_torch, atol=1e-7)
     return model_dpcpp, model_torch

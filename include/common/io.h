@@ -1,10 +1,10 @@
 #pragma once
 
+#include "common.h"
 #include "encoding.h"
 #include "json.hpp"
 #include <string>
 #include <unordered_map>
-
 namespace io {
 
 using json = nlohmann::json;
@@ -80,45 +80,6 @@ json validateAndCopyEncodingConfig(const json &encodingConfig) {
 }
 
 template <typename T, int WIDTH>
-std::vector<T> get_packed_weights(std::vector<T> unpacked_weights, int m_n_hidden_layers, int input_width,
-                                  int output_width) {
-    std::vector<T> weights_packed(unpacked_weights.size(), 0.0);
-
-    for (int idx = 0; idx < weights_packed.size(); idx++) {
-
-        int i = 0;
-        int j = 0;
-        if (idx < input_width * WIDTH) {
-
-            i = idx / WIDTH; // rows
-            j = idx % WIDTH; // cols
-
-            weights_packed[toPackedLayoutCoord(i + j * WIDTH, WIDTH, WIDTH)] = unpacked_weights[idx];
-        } else if ((idx >= input_width * WIDTH) &&
-                   (idx < input_width * WIDTH + (m_n_hidden_layers - 1) * WIDTH * WIDTH)) {
-            int layer = (idx - input_width * WIDTH) / (WIDTH * WIDTH);
-            int mat_offset = (idx - (input_width * WIDTH + layer * WIDTH * WIDTH)) % (WIDTH * WIDTH);
-
-            i = mat_offset / WIDTH; // rows
-            j = mat_offset % WIDTH; // cols
-
-            weights_packed[input_width * WIDTH + layer * WIDTH * WIDTH +
-                           toPackedLayoutCoord(i + j * WIDTH, WIDTH, WIDTH)] = unpacked_weights[idx];
-        } else {
-            int mat_offset =
-                (idx - input_width * WIDTH - (m_n_hidden_layers - 1) * WIDTH * WIDTH) % (WIDTH * output_width);
-            i = mat_offset / WIDTH; // rows
-            j = mat_offset % WIDTH; // cols
-
-            weights_packed[input_width * WIDTH + (m_n_hidden_layers - 1) * WIDTH * WIDTH +
-                           toPackedLayoutCoord(i + j * WIDTH, WIDTH, WIDTH)] = unpacked_weights[idx];
-        }
-    }
-
-    return weights_packed;
-}
-
-template <typename T, int WIDTH>
 std::vector<T> load_weights_as_packed_from_file(std::string filename, int m_n_hidden_layers, int input_width,
                                                 int output_width) {
     // Read each value from the file and set it as a bf16 value in weights matrices
@@ -143,7 +104,7 @@ std::vector<T> load_weights_as_packed_from_file(std::string filename, int m_n_hi
 
     file.close();
 
-    return get_packed_weights<T, WIDTH>(data_vec, m_n_hidden_layers, input_width, output_width);
+    return get_packed_weights<T>(data_vec, m_n_hidden_layers, input_width, WIDTH, output_width);
 }
 
 template <typename T> std::vector<T> loadVectorFromCSV(const std::string &filename) {

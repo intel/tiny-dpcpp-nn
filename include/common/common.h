@@ -226,3 +226,47 @@ template <typename T> std::string type_to_string() {
 
     return "unknown";
 }
+
+template <typename T>
+std::vector<T> get_packed_weights(std::vector<T> unpacked_weights, int m_n_hidden_layers, int input_width,
+                                  int network_width, int output_width) {
+    std::vector<T> weights_packed(unpacked_weights.size(), 0.0);
+
+    for (int idx = 0; idx < weights_packed.size(); idx++) {
+
+        int i = 0;
+        int j = 0;
+        if (idx < input_width * network_width) {
+
+            i = idx / network_width; // rows
+            j = idx % network_width; // cols
+
+            weights_packed[toPackedLayoutCoord(i + j * network_width, network_width, network_width)] =
+                unpacked_weights[idx];
+        } else if ((idx >= input_width * network_width) &&
+                   (idx < input_width * network_width + (m_n_hidden_layers - 1) * network_width * network_width)) {
+            int layer = (idx - input_width * network_width) / (network_width * network_width);
+            int mat_offset = (idx - (input_width * network_width + layer * network_width * network_width)) %
+                             (network_width * network_width);
+
+            i = mat_offset / network_width; // rows
+            j = mat_offset % network_width; // cols
+
+            weights_packed[input_width * network_width + layer * network_width * network_width +
+                           toPackedLayoutCoord(i + j * network_width, network_width, network_width)] =
+                unpacked_weights[idx];
+        } else {
+            int mat_offset =
+                (idx - input_width * network_width - (m_n_hidden_layers - 1) * network_width * network_width) %
+                (network_width * output_width);
+            i = mat_offset / network_width; // rows
+            j = mat_offset % network_width; // cols
+
+            weights_packed[input_width * network_width + (m_n_hidden_layers - 1) * network_width * network_width +
+                           toPackedLayoutCoord(i + j * network_width, network_width, network_width)] =
+                unpacked_weights[idx];
+        }
+    }
+
+    return weights_packed;
+}

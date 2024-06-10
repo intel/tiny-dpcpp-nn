@@ -23,6 +23,7 @@ class MLP(torch.nn.Module):
         self.nwe_as_ref = nwe_as_ref
         # Used for gradecheck and naming consistency with modules.py (Swiftnet)
         self.input_width = input_size
+        self.width = hidden_sizes[0]
         self.output_width = output_size
         # if input_size < 16:
         #     print("Currently we do manual encoding for input size < 16.")
@@ -110,3 +111,24 @@ class MLP(torch.nn.Module):
         for i, weight in enumerate(parameters):
             assert self.layers[i].weight.shape == weight.shape
             self.layers[i].weight = torch.nn.Parameter(weight)
+
+    def get_all_weights(self):
+        weights = []
+        for layer in self.layers:
+            if hasattr(layer, "weight"):
+                weight = layer.weight.data
+                # Pad the first dimension if necessary
+                if weight.shape[0] != self.width:
+                    padding = (
+                        0,
+                        0,
+                        0,
+                        self.width - weight.shape[0],
+                    )  # pad last dim
+                    weight = torch.nn.functional.pad(weight, padding, "constant", 0)
+                # Pad the second dimension if necessary
+                elif weight.shape[1] != self.width:
+                    padding = (0, self.width - weight.shape[1])  # pad last dim
+                    weight = torch.nn.functional.pad(weight, padding, "constant", 0)
+                weights.append(weight)
+        return torch.stack(weights)

@@ -221,7 +221,9 @@ template <typename T_enc, typename T_net> class NetworkWithEncoding {
 
     std::shared_ptr<Network<T_net>> get_network() { return network_; }
 
-    void set_network_params(std::vector<T_net> network_params) { network_->set_weights_matrices(network_params); }
+    void set_network_params(std::vector<T_net> network_params) {
+        network_->set_weights_matrices(network_params, false);
+    }
 
     void set_encoding_params(DeviceMatrix<T_enc> &encoding_params_dev_matrix,
                              std::vector<T_enc> *encoding_params = nullptr) {
