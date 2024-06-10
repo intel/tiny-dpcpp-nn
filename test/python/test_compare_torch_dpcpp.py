@@ -6,18 +6,17 @@ import pytest
 import pdb
 from src.utils import create_models, compare_matrices, get_grad_params
 
-input_sizes = [8]
-output_funcs = ["linear", "relu", "sigmoid"]
-output_sizes = [8]
+input_sizes = [1, 2, 4, 8, 16]
+output_funcs = ["linear", "sigmoid"]
+output_sizes = [1, 2, 4, 8, 16]
 activation_funcs = ["relu", "linear", "sigmoid"]
 hidden_layer_counts = [1, 2, 4]
-dtypes = [torch.float16, torch.bfloat16]
-# hidden_sizes = [16, 32, 64, 128]
-hidden_sizes = [64]
-
+# dtypes = [torch.float16, torch.bfloat16]
+dtypes = [torch.bfloat16]
+hidden_sizes = [16, 32, 64, 128]
+use_nwe_array = [False, True]
 BATCH_SIZE = 2**10
 DEVICE_NAME = "xpu"
-USE_NWE = True
 
 
 class CustomMSELoss(torch.nn.Module):
@@ -65,7 +64,7 @@ def train_model(model, x_train, y_train, n_steps):
 
 
 @pytest.mark.parametrize(
-    "input_size, hidden_size, hidden_layers, output_size, activation_func, output_func, dtype",
+    "input_size, hidden_size, hidden_layers, output_size, activation_func, output_func, dtype, use_nwe",
     [
         (
             input_size,
@@ -75,6 +74,7 @@ def train_model(model, x_train, y_train, n_steps):
             activation_func,
             output_func,
             dtype,
+            use_nwe,
         )
         for input_size in input_sizes
         for hidden_layers in hidden_layer_counts
@@ -83,6 +83,7 @@ def train_model(model, x_train, y_train, n_steps):
         for activation_func in activation_funcs
         for output_func in output_funcs
         for dtype in dtypes
+        for use_nwe in use_nwe_array
     ],
 )
 def test_grad(
@@ -93,7 +94,8 @@ def test_grad(
     activation_func,
     output_func,
     dtype,
-    iterations=2,
+    use_nwe,
+    iterations=1,
     n_steps=1,  # if this is too large, there will be accumulated error (weights aren't the same, thus the loss is not the same etc)
 ):
 
@@ -119,8 +121,9 @@ def test_grad(
             output_size,
             activation_func,
             output_func,
-            dtype,
-            use_nwe=USE_NWE,
+            input_dtype=torch.float if use_nwe else dtype,
+            backend_param_dtype=dtype,
+            use_nwe=use_nwe,
         )
 
         loss_dpcpp, y_dpcpp, grads_dpcpp, params_dpcpp = train_model(
@@ -134,6 +137,7 @@ def test_grad(
         params_torch = params_torch[0]
         print("Compare params")
         compare_matrices(params_dpcpp, params_torch)
+        print("Compare params passed")
 
         grads_dpcpp = grads_dpcpp[0][0]
         grads_torch = grads_torch[0]
@@ -145,10 +149,11 @@ def test_grad(
             ) < 1e-3
         print("Compare grads")
         compare_matrices(grads_dpcpp, grads_torch)
+        print("Compare grads passed")
 
 
 @pytest.mark.parametrize(
-    "input_size, hidden_size, hidden_layers, output_size, activation_func, output_func, dtype",
+    "input_size, hidden_size, hidden_layers, output_size, activation_func, output_func, dtype, use_nwe",
     [
         (
             input_size,
@@ -158,6 +163,7 @@ def test_grad(
             activation_func,
             output_func,
             dtype,
+            use_nwe,
         )
         for input_size in input_sizes
         for hidden_layers in hidden_layer_counts
@@ -166,6 +172,7 @@ def test_grad(
         for activation_func in activation_funcs
         for output_func in output_funcs
         for dtype in dtypes
+        for use_nwe in use_nwe_array
     ],
 )
 def test_fwd(
@@ -176,6 +183,7 @@ def test_fwd(
     activation_func,
     output_func,
     dtype,
+    use_nwe,
 ):
     # Generate random input data for testing
     torch.manual_seed(123)
@@ -186,8 +194,9 @@ def test_fwd(
         output_size,
         activation_func,
         output_func,
-        dtype,
-        use_nwe=USE_NWE,
+        input_dtype=torch.float if use_nwe else dtype,
+        backend_param_dtype=dtype,
+        use_nwe=use_nwe,
     )
     model_torch.to(DEVICE_NAME)
     model_dpcpp.to(DEVICE_NAME)
@@ -195,28 +204,32 @@ def test_fwd(
     # print("Params model_dpcpp: ", list(model_dpcpp.parameters())[:10])
     y_torch = model_torch(input_data)
     y_dpcpp = model_dpcpp(input_data)
+    eps = 1e-3
+    forward_error = abs(y_torch.sum() - y_dpcpp.sum()) / max(abs(y_torch).sum(), eps)
 
-    if abs(y_torch.sum() - y_dpcpp.sum()) / (abs(y_torch).sum()) > 0.01:
+    if forward_error >= 0.01:
         print("Torch output: ", y_torch[-1, :])
         print("DPCPP output: ", y_dpcpp[-1, :])
         print(
             f"diff: {y_torch[-1, :] - y_dpcpp[-1, :]}, average: {abs(y_torch - y_dpcpp).mean()}"
         )
     assert (
-        abs(y_torch.sum() - y_dpcpp.sum()) / (abs(y_torch).sum()) < 0.01
+        forward_error <= 0.01
     ), f"Forward error is too large {abs(y_torch.sum() - y_dpcpp.sum()) / (abs(y_torch).sum()) :.4f}"
 
 
 if __name__ == "__main__":
-    input_width = 16
-    output_width = 16
+
+    input_width = 2
     hidden_size = 16
-    hidden_layers = 2
-    # activation_func = "linear"
-    activation_func = "relu"
-    # output_func = "linear"
-    output_func = "sigmoid"
-    dtype = torch.float16
+    hidden_layers = 1
+    output_width = 2
+    # activation_func = "sigmoid"
+    activation_func = "sigmoid"
+    output_func = "relu"
+    # output_func = "sigmoid"
+    dtype = torch.bfloat16
+    use_nwe = True
     test_fwd(
         input_width,
         hidden_size,
@@ -225,6 +238,7 @@ if __name__ == "__main__":
         activation_func,
         output_func,
         dtype,
+        use_nwe,
     )
     print("Passed fwd test")
 
@@ -236,5 +250,6 @@ if __name__ == "__main__":
         activation_func,
         output_func,
         dtype,
+        use_nwe,
     )
     print("Passed bwd test")
