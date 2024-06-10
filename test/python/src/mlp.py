@@ -15,10 +15,12 @@ class MLP(torch.nn.Module):
         activation_func="relu",
         output_activation=None,
         use_batchnorm=False,
+        nwe_as_ref=False,  # NetworkWithEncoding (padded input as ones) is used as ref
         dtype=torch.bfloat16,
     ):
         super().__init__()
         self.dtype = dtype
+        self.nwe_as_ref = nwe_as_ref
         # Used for gradecheck and naming consistency with modules.py (Swiftnet)
         self.input_width = input_size
         self.output_width = output_size
@@ -32,14 +34,10 @@ class MLP(torch.nn.Module):
         self.use_batchnorm = use_batchnorm
 
         # Input layer
-        input_dim = hidden_sizes[0] if input_size <= 64 else input_size
+        input_dim = hidden_sizes[0]
         self.layers.append(
             torch.nn.Linear(input_dim, hidden_sizes[0], bias=BIAS).to(self.dtype)
         )
-        # if input_size < 16:
-        #     # the encoding in the current implementaiton doesn't have grad.
-        #     # Set requires_grad to False for the parameters of the first layer (layers[0])
-        #     self.layers[0].weight.requires_grad = False
 
         if self.use_batchnorm:
             self.layers.append(torch.nn.BatchNorm1d(hidden_sizes[0]).to(self.dtype))
@@ -65,13 +63,19 @@ class MLP(torch.nn.Module):
         x_changed_dtype = x.to(self.dtype)
         assert x_changed_dtype.dtype == self.dtype
         batch_size = x_changed_dtype.size(0)
-        ones = torch.ones(
-            (batch_size, self.layers[0].in_features - self.input_width),
-            dtype=x_changed_dtype.dtype,
-            device=x_changed_dtype.device,
-        )
-        x_changed_dtype = torch.cat((x_changed_dtype, ones), dim=1)
-
+        if self.nwe_as_ref:
+            padded_vals = torch.ones(
+                (batch_size, self.layers[0].in_features - self.input_width),
+                dtype=x_changed_dtype.dtype,
+                device=x_changed_dtype.device,
+            )  # ones, as NWE pads with 1
+        else:
+            padded_vals = torch.zeros(
+                (batch_size, self.layers[0].in_features - self.input_width),
+                dtype=x_changed_dtype.dtype,
+                device=x_changed_dtype.device,
+            )  # zeros, such that the bwd pass through padded vals also equals zero
+        x_changed_dtype = torch.cat((x_changed_dtype, padded_vals), dim=1)
         for i, layer in enumerate(self.layers):
             if i == len(self.layers) - 1:
                 x_changed_dtype = self._apply_activation(

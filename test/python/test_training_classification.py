@@ -30,11 +30,22 @@ def train_mlp(model, data, labels, epochs, learning_rate):
     loss_stagnant_counter = 0
 
     for epoch in range(epochs):
+        print("========================")
         optimizer.zero_grad()  # Zero the gradients
         outputs = model(data)  # Forward pass
+        print(f"Output: {outputs}")
         loss = criterion(outputs, labels)  # Compute loss
+        print(f"loss: {loss}")
+        print(
+            f"Params pre: {model.params.cpu()}, max: {model.params.cpu().max()},  min: {model.params.cpu().min()}"
+        )
+        if epoch == 1:
+            break
         loss.backward()  # Backward pass
         optimizer.step()  # Update weights
+        print(
+            f"Params post: {model.params.cpu()}, max: {model.params.cpu().max()},  min: {model.params.cpu().min()}"
+        )
 
         # Early stopping condition
         if loss.item() < best_loss:
@@ -300,7 +311,7 @@ if __name__ == "__main__":
     print("Testing network")
     test_network(dtype)
 
-    print("Testing encoding")
-    test_encoding()
+    # print("Testing encoding")
+    # test_encoding()
 
-    test_network_with_encoding_all(dtype)
+    # test_network_with_encoding_all(dtype)

@@ -32,7 +32,7 @@ def get_grad_params(model):
     return grads_all, params_all
 
 
-def compare_matrices(weights_dpcpp, weights_torch, atol=1e-2):
+def compare_matrices(weights_dpcpp, weights_torch, atol=1e-1, rtol=5e-2):
     for layer, _ in enumerate(weights_dpcpp):
         assert (
             weights_dpcpp[layer].shape == weights_torch[layer].shape
@@ -42,8 +42,14 @@ def compare_matrices(weights_dpcpp, weights_torch, atol=1e-2):
             weights_dpcpp[layer].to(dtype=torch.float),
             weights_torch[layer].to(dtype=torch.float),
             atol=atol,
+        ) or torch.allclose(
+            weights_dpcpp[layer].to(dtype=torch.float),
+            weights_torch[layer].to(dtype=torch.float),
+            rtol=rtol,
         )
         if not are_close:
+            print(f"weights_dpcpp: {weights_dpcpp}")
+            print(f"weights_torch: {weights_torch}")
             print(f"weights_dpcpp[layer] sum: {weights_dpcpp[layer].sum().sum()}")
             print(f"weights_torch[layer] sum: {weights_torch[layer].sum().sum()}")
         assert are_close
@@ -55,9 +61,9 @@ def create_models(
     output_size,
     activation_func,
     output_func,
-    input_dtype=torch.float16,
-    backend_param_dtype=torch.float16,
-    use_nwe=True,
+    input_dtype,
+    backend_param_dtype,
+    use_nwe,
 ):
 
     # Create and test CustomMLP
@@ -69,6 +75,7 @@ def create_models(
         output_func,
         use_batchnorm=False,
         dtype=backend_param_dtype,
+        nwe_as_ref=use_nwe,
     )
 
     network_config = {

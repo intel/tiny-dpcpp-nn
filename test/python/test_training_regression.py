@@ -12,7 +12,7 @@ CALC_REF = True
 USE_ADAM = True
 
 DTYPE = torch.bfloat16
-USE_NWE = True
+USE_NWE = False
 WIDTH = 16
 num_epochs = 100
 
@@ -88,6 +88,7 @@ model_dpcpp, model_torch = create_models(
     output_size,
     "relu",
     "linear",
+    use_nwe=USE_NWE,
     input_dtype=torch.float if USE_NWE else DTYPE,
     backend_param_dtype=DTYPE,
 )
