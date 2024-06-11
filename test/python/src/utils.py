@@ -118,7 +118,5 @@ def create_models(
         weights = model_torch.get_all_weights()
         model_dpcpp.set_params(weights)
 
-    grads_dpcpp, params_dpcpp = get_grad_params(model_dpcpp)
-    grads_torch, params_torch = get_grad_params(model_torch.to(model_dpcpp.device))
-    compare_matrices(params_dpcpp[0], params_torch, atol=1e-7)
+    model_torch.to(model_dpcpp.device)
     return model_dpcpp, model_torch

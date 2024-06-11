@@ -36,8 +36,7 @@ template <typename T> T stringToEnum(const std::string &value, const std::unorde
     if (it != enumMap.end()) {
         return it->second;
     }
-    // Handle error or default case here
-    // For example, you can throw an exception if the value is not found
+
     throw std::runtime_error("Invalid enum value");
 }
 
@@ -62,7 +61,7 @@ json loadJsonConfig(const std::string &filename) {
 
 // Function to validate and copy encoding_config with correct enums
 json validateAndCopyEncodingConfig(const json &encodingConfig) {
-    json encodingConfigCopy = encodingConfig; // Start by making a copy of the entire input JSON
+    json encodingConfigCopy = encodingConfig;
 
     auto convertIfString = [&encodingConfigCopy](const auto &enumMap, const std::string &key) {
         if (encodingConfigCopy.contains(key) && encodingConfigCopy[key].is_string()) {

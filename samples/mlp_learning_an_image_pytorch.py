@@ -53,6 +53,8 @@ from src.common import read_image, write_image, ROOT_DIR
 DATA_DIR = os.path.join(ROOT_DIR, "data")
 IMAGES_DIR = os.path.join(DATA_DIR, "images")
 
+DTYPE = torch.bfloat16
+
 
 class Image(torch.nn.Module):
     def __init__(self, filename, device):
@@ -152,12 +154,15 @@ if __name__ == "__main__":
     encoding = tnn.Encoding(
         n_input_dims=2,
         encoding_config=config["encoding"],
-        dtype=torch.float,
+        input_dtype=torch.float,
+        backend_param_dtype=torch.float,
     )
     network = tnn.Network(
         n_input_dims=encoding.n_output_dims,
         n_output_dims=n_channels,
         network_config=config["network"],
+        input_dtype=DTYPE,
+        backend_param_dtype=DTYPE,
     )
     model = torch.nn.Sequential(encoding, network).to(device)
 
