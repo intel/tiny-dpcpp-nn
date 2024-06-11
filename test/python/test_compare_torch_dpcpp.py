@@ -12,7 +12,6 @@ output_sizes = [1, 2, 4, 8, 16]
 activation_funcs = ["relu", "linear", "sigmoid"]
 hidden_layer_counts = [1, 2, 4]
 dtypes = [torch.float16, torch.bfloat16]
-# dtypes = [torch.bfloat16]
 hidden_sizes = [16, 32, 64, 128]
 # use_nwe_array = [False, True]
 use_nwe_array = [False]
@@ -35,7 +34,6 @@ def train_model(model, x_train, y_train, n_steps):
     batch_size = BATCH_SIZE
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     loss_fn = CustomMSELoss()
-    # loss_fn = torch.nn.MSELoss()
     y_predicted_all = []
     grads = []
     params = []
@@ -60,7 +58,6 @@ def train_model(model, x_train, y_train, n_steps):
             all_loss.append(loss.detach().cpu().to(torch.float))
         loss_mean = np.mean(np.array(all_loss))
         losses.append(loss_mean)
-        # print(f"{n} - Loss: {loss_mean}")
 
     return losses, y_predicted_all, grads, params
 
@@ -139,11 +136,12 @@ def test_grad(
             model_torch, x_train, y_train, n_steps
         )
 
-        params_dpcpp = params_dpcpp[0][0]
-        params_torch = params_torch[0]
-        print("Compare params")
-        compare_matrices(params_dpcpp, params_torch)
-        print("Compare params passed")
+        if use_weights_of_tinynn:
+            params_dpcpp = params_dpcpp[0][0]
+            params_torch = params_torch[0]
+            print("Compare params")
+            compare_matrices(params_dpcpp, params_torch)
+            print("Compare params passed")
 
         grads_dpcpp = grads_dpcpp[0][0]
         grads_torch = grads_torch[0]
@@ -230,17 +228,17 @@ def test_fwd(
 
 if __name__ == "__main__":
 
-    input_width = 2
+    input_width = 8
     hidden_size = 16
     hidden_layers = 1
-    output_width = 1
+    output_width = 16
     activation_func = "sigmoid"
     # activation_func = "relu"
     output_func = "linear"
     # output_func = "sigmoid"
     dtype = torch.bfloat16
     use_nwe = False
-    use_weights_of_tinynn = True
+    use_weights_of_tinynn = False
 
     test_fwd(
         input_width,

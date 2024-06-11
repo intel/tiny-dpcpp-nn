@@ -307,7 +307,6 @@ template <typename T> class EncodingModule : public Module {
     torch::Tensor inference(torch::Tensor input_tensor) override { return forward_pass(input_tensor); }
 
     std::tuple<torch::Tensor, torch::Tensor> backward_pass(torch::Tensor grad_output, bool pack_gradient = false,
-
                                                            bool get_dl_dinput = false) override {
         throw std::runtime_error("backward_pass needs input_from_fwd");
     }

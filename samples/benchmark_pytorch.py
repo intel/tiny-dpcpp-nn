@@ -45,6 +45,8 @@ def start_training(
             n_input_dims=input_size,
             n_output_dims=output_size,
             network_config=network_config,
+            input_dtype=DTYPE,
+            backend_param_dtype=DTYPE,
         )
     else:
         model = MLP(
