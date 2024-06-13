@@ -74,7 +74,6 @@ def create_models(
         output_size,
         activation_func,
         output_func,
-        use_batchnorm=False,
         dtype=backend_param_dtype,
         nwe_as_ref=use_nwe,
     )
@@ -116,7 +115,7 @@ def create_models(
         model_torch.set_weights(weights)
     else:
         weights = model_torch.get_all_weights()
-        model_dpcpp.set_params(weights)
+        model_dpcpp.set_params(weights.flatten())
 
     model_torch.to(model_dpcpp.device)
     return model_dpcpp, model_torch

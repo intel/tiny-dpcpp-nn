@@ -14,51 +14,46 @@ class MLP(torch.nn.Module):
         output_size,
         activation_func="relu",
         output_activation=None,
-        use_batchnorm=False,
         nwe_as_ref=False,  # NetworkWithEncoding (padded input as ones) is used as ref
         dtype=torch.bfloat16,
+        constant_weight=False,
     ):
         super().__init__()
         self.dtype = dtype
         self.nwe_as_ref = nwe_as_ref
-        # Used for gradecheck and naming consistency with modules.py (Swiftnet)
         self.input_width = input_size
         self.width = hidden_sizes[0]
         self.output_width = output_size
-        # if input_size < 16:
-        #     print("Currently we do manual encoding for input size < 16.")
-        #     hidden_sizes.insert(0, 64)
         self.layers = torch.nn.ModuleList()
         assert isinstance(activation_func, str) or None
         self.activation_func = activation_func
         self.output_activation = output_activation
-        self.use_batchnorm = use_batchnorm
 
         # Input layer
         input_dim = hidden_sizes[0]
-        self.layers.append(
-            torch.nn.Linear(input_dim, hidden_sizes[0], bias=BIAS).to(self.dtype)
+        input_layer = torch.nn.Linear(
+            input_dim, hidden_sizes[0], bias=BIAS, dtype=self.dtype
         )
-
-        if self.use_batchnorm:
-            self.layers.append(torch.nn.BatchNorm1d(hidden_sizes[0]).to(self.dtype))
+        if constant_weight:
+            torch.nn.init.constant_(input_layer.weight, 0.1)
+        self.layers.append(input_layer)
 
         # Hidden layers
         for i in range(1, len(hidden_sizes)):
-            self.layers.append(
-                torch.nn.Linear(hidden_sizes[i - 1], hidden_sizes[i], bias=False).to(
-                    self.dtype
-                )
+            hidden_layer = torch.nn.Linear(
+                hidden_sizes[i - 1], hidden_sizes[i], bias=BIAS, dtype=self.dtype
             )
-
-            # BatchNorm layer for hidden layers (if enabled)
-            if self.use_batchnorm:
-                self.layers.append(torch.nn.BatchNorm1d(hidden_sizes[i]).to(self.dtype))
+            if constant_weight:
+                torch.nn.init.constant_(hidden_layer.weight, 0.1)
+            self.layers.append(hidden_layer)
 
         # Output layer
-        self.layers.append(
-            torch.nn.Linear(hidden_sizes[-1], output_size, bias=False).to(self.dtype)
+        output_layer = torch.nn.Linear(
+            hidden_sizes[-1], output_size, bias=BIAS, dtype=self.dtype
         )
+        if constant_weight:
+            torch.nn.init.constant_(output_layer.weight, 0.1)
+        self.layers.append(output_layer)
 
     def forward(self, x):
         x_changed_dtype = x.to(self.dtype)
@@ -109,6 +104,7 @@ class MLP(torch.nn.Module):
 
     def set_weights(self, parameters):
         for i, weight in enumerate(parameters):
+            assert weight.dtype == self.dtype
             assert self.layers[i].weight.shape == weight.shape
             self.layers[i].weight = torch.nn.Parameter(weight)
 
@@ -132,3 +128,24 @@ class MLP(torch.nn.Module):
                     weight = torch.nn.functional.pad(weight, padding, "constant", 0)
                 weights.append(weight)
         return torch.stack(weights)
+
+    def get_all_grads(self):
+        grads = []
+        for param in self.parameters():
+            grad = param.grad
+            if grad is not None:
+                # Pad the first dimension if necessary
+                if grad.shape[0] != self.width:
+                    padding = (
+                        0,
+                        0,
+                        0,
+                        self.width - grad.shape[0],
+                    )  # pad last dim
+                    grad = torch.nn.functional.pad(grad, padding, "constant", 0)
+                # Pad the second dimension if necessary
+                elif grad.shape[1] != self.width:
+                    padding = (0, self.width - grad.shape[1])  # pad last dim
+                    grad = torch.nn.functional.pad(grad, padding, "constant", 0)
+                grads.append(grad)
+        return torch.stack(grads)

@@ -61,6 +61,7 @@ class _module_function(torch.autograd.Function):
     @staticmethod
     def forward(ctx, native_tnn_module, input, params, info, loss_scale):
         batch_size = input.shape[0]
+
         if info["is_in_eval_mode"]:
             output = native_tnn_module.inference(input.to(params.dtype))
         else:
@@ -101,12 +102,8 @@ class _module_function(torch.autograd.Function):
 
         batch_size = input.shape[0]
         doutput = doutput * loss_scale
-
         with torch.no_grad():
-            if (
-                "encoding_config"
-                in ctx.info
-            ):
+            if "encoding_config" in ctx.info:
                 input_grad = None
 
                 if batch_size == 0:
@@ -130,12 +127,14 @@ class _module_function(torch.autograd.Function):
                         False,  # don't pack the grad, don't get dldinput
                     )
             else:
+                # This is Network only
                 pack_weights = True
                 input_grad, grad = ctx.native_tnn_module.bwd_no_encoding_grad(
                     doutput, pack_weights, True  # pack the grad, get dldinput
                 )
                 if input_grad is not None:
                     input_grad = input_grad.reshape(batch_size, -1)
+
         grad = None if grad is None else (grad / loss_scale)
         input_grad = None if input_grad is None else (input_grad / loss_scale)
 
@@ -146,7 +145,6 @@ class _module_function(torch.autograd.Function):
 class Module(torch.nn.Module):
     def __init__(
         self,
-        create_params=False,
         device="xpu",
         input_dtype=torch.float16,
         backend_param_dtype=torch.float16,
@@ -162,25 +160,12 @@ class Module(torch.nn.Module):
             self.loss_scale = 1.0
 
         self.tnn_module = self.create_module()
-        if self.tnn_module.n_params() and create_params:
-            torch_params = (
-                torch.ones(self.tnn_module.n_params(), 1).to(
-                    dtype=self.backend_param_dtype
-                )
-                * 0.1
-            )
-            # Set the initial parameters based on the transformed torch_params
-            initial_params = self.tnn_module.initial_params(torch_params.to(device))
-            # Creating the torch.nn.Parameter object with the initialized tensor
-            self.params = torch.nn.Parameter(
-                initial_params.to(device), requires_grad=True
-            )
-        elif self.tnn_module.n_params():
+
+        if self.tnn_module.n_params():
             initial_params = self.tnn_module.initial_params()
-            # Creating the torch.nn.Parameter object with the initialized tensor
-            self.params = torch.nn.Parameter(
-                initial_params.to(device), requires_grad=True
-            )
+            # This explicitely creates a tensor whose memory is managed by PyTorch in modules.py
+            cloned_params = initial_params.clone().detach()
+            self.params = torch.nn.Parameter(cloned_params, requires_grad=True)
         else:
             print(
                 "No params initialised, as n_params = 0. This is correct for Encodings (apart from grid encodings)."
@@ -189,11 +174,25 @@ class Module(torch.nn.Module):
                 self.device
             )
 
-    def set_params(self, params):
+    def set_params(self, params=None):
+        packed = params is None
+
+        if params is None:
+            # this forces the backend to use the self.params which were overwritten in python only (pointing to different backend arrays)
+            params = self.params
+
         assert isinstance(params, torch.Tensor), "Params is not a torch.Tensor"
-        if len(params.shape) > 1:
-            params = params.flatten()
-        self.tnn_module.set_params(params, False)
+
+        self.tnn_module.set_params(params.to(self.backend_param_dtype), packed)
+
+        if not packed:
+            packed_weights = self.get_params()  # this is always packed params
+            # Set self.params to the params passed. Backend dpcpp and python seem to be different underlying memories
+            self.params.data.copy_(packed_weights)
+
+    def get_params(self):
+        # return packed params. Currently tnn_module.initial_params() does the same as get_params()
+        return self.tnn_module.get_params()
 
     def get_reshaped_params(
         self,
@@ -332,6 +331,7 @@ class Module(torch.nn.Module):
             # added for NWE and encoding
             info.update({"encoding_config": self.encoding_config})
 
+        self.set_params()
         output = _module_function.apply(
             self.tnn_module,
             padded_tensor.contiguous(),
