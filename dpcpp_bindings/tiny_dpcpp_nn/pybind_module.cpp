@@ -55,6 +55,8 @@ class PybindingModule {
         m_module->set_params(tensor, weights_are_packed);
     }
 
+    torch::Tensor get_params() { return m_module->get_params(); }
+
     uint32_t n_params() const { return (uint32_t)m_module->n_params(); }
     uint32_t n_output_dims() const { return m_module->n_output_dims(); }
 
@@ -186,6 +188,7 @@ PYBIND11_MODULE(tiny_dpcpp_nn_pybind_module, m) {
         .def("initial_params", pybind11::overload_cast<>(&PybindingModule::initial_params))
         .def("initial_params", pybind11::overload_cast<torch::Tensor &>(&PybindingModule::initial_params))
         .def("set_params", &PybindingModule::set_params)
+        .def("get_params", &PybindingModule::get_params)
         .def("n_output_dims", &PybindingModule::n_output_dims)
         .def("n_params", &PybindingModule::n_params);
     m.def("create_network", &create_network_factory, pybind11::arg("input_width"), pybind11::arg("output_width"),

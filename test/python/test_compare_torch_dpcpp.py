@@ -208,8 +208,7 @@ def test_fwd(
     )
     model_torch.to(DEVICE_NAME)
     model_dpcpp.to(DEVICE_NAME)
-    # print("Params model_torch: ", list(model_torch.parameters())[:10])
-    # print("Params model_dpcpp: ", list(model_dpcpp.parameters())[:10])
+
     y_torch = model_torch(input_data)
     y_dpcpp = model_dpcpp(input_data)
     eps = 1e-3
@@ -232,13 +231,13 @@ if __name__ == "__main__":
     hidden_size = 16
     hidden_layers = 1
     output_width = 16
-    activation_func = "sigmoid"
-    # activation_func = "relu"
+    # activation_func = "sigmoid"
+    activation_func = "relu"
     output_func = "linear"
     # output_func = "sigmoid"
-    dtype = torch.bfloat16
+    dtype = torch.float16
     use_nwe = False
-    use_weights_of_tinynn = False
+    use_weights_of_tinynn = True
 
     test_fwd(
         input_width,
