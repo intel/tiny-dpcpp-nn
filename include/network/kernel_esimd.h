@@ -69,7 +69,8 @@ template <> struct XMXCType<bf16> {
 };
 template <> struct XMXCType<sycl::half> {
 #if TARGET_DEVICE == 0
-    typedef sycl::half CType;
+    typedef float CType;
+    //typedef sycl::half CType;
 #elif TARGET_DEVICE == 1
     typedef float CType;
 #endif
