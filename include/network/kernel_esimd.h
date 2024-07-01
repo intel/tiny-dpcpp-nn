@@ -43,6 +43,41 @@ __ESIMD_NS::simd<T, N> dpas(__ESIMD_NS::simd_view<simd<CT, N_orig>, region1d_t<C
     return __esimd_dpas2<BPrecision, APrecision, SystolicDepth, RepeatCount, RawT, CRawT, MsgT, MsgT, N, BNCasted,
                          ANCasted>(C.data(), BCasted.data(), ACasted.data());
 }
+
+
+ template <
+     int SystolicDepth, int RepeatCount, typename T, typename BT, typename AT,
+     dpas_argument_type BPrecision = detail::dpas_precision_from_type<BT>(),
+     dpas_argument_type APrecision = detail::dpas_precision_from_type<AT>(),
+     int BN, int AN, int AN_orig>
+ auto dpas(__ESIMD_NS::simd<BT, BN> B, __ESIMD_NS::simd_view<simd<AT, AN_orig>, region1d_t<AT, AN, 1>> A) {
+  
+   constexpr int ExecutionSize =
+       detail::verify_parameters_and_deduce_exec_size<SystolicDepth, RepeatCount,
+                                                      T, T, BT, AT, BPrecision,
+                                                      APrecision, BN, AN>();
+   // Result(_Mx_N) = A(_Mx_K) * B(_Kx_N)
+   // where:
+   //   _M = RepeatCount;
+   //   _K = SystolicDepth * OpsPerChannel;
+   //   _N = ExecutionSize (unknown, but deducible), must be 8 or 16.
+   constexpr int ResultN = RepeatCount * ExecutionSize;
+  
+   using MsgT = int;
+   constexpr int ANCasted = AN * sizeof(AT) / sizeof(MsgT);
+   constexpr int BNCasted = BN * sizeof(BT) / sizeof(MsgT);
+   __ESIMD_NS::simd<MsgT, ANCasted> ACasted = A.template bit_cast_view<MsgT>();
+   __ESIMD_NS::simd<MsgT, BNCasted> BCasted = B.template bit_cast_view<MsgT>();
+  
+   constexpr int Info = (RepeatCount << 24) + (SystolicDepth << 16) +
+                        ((int)APrecision << 8) + (int)BPrecision;
+   using RawT = typename __ESIMD_NS::simd<T, ResultN>::raw_element_type;
+   __ESIMD_NS::simd<T, ResultN> Result =
+       __esimd_dpas_nosrc0<Info, RawT, MsgT, MsgT, ResultN, BNCasted, ANCasted>(
+           BCasted.data(), ACasted.data());
+   return Result;
+ }
+
 }; // namespace sycl::ext::intel::esimd::xmx
 
 namespace tinydpcppnn {
@@ -174,8 +209,6 @@ class EsimdKernels {
                 // we are also doing output->last hidden layer
 
                 for (int layer = n_hidden_layers; layer > 0; layer--) {
-                    Cs = static_cast<Tc>(0);
-
                     MAD<TM, TK>(As, weights.GetMatrixPointer(layer), Cs);
 
                     applyBackwardActivation<activation, TM, TK>(
@@ -185,8 +218,6 @@ class EsimdKernels {
                         As, intermediate_backward.GetElementPointer(layer - 1, loc_row_offset, 0));
                 }
                 if (dL_dinput.has_value()) {
-                    Cs = static_cast<Tc>(0);
-
                     MAD<TM, TK>(As, weights.GetMatrixPointer(0), Cs);
 
                     applyBackwardActivation<Activation::None, TM, TK>(
@@ -335,15 +366,36 @@ class EsimdKernels {
         constexpr int vnni_factor = std::max<int>(1, 4 / sizeof(T));
 
 #if TARGET_DEVICE == 0
-#pragma collapse(2) unroll
-        for (int iterA = 0; iterA < WIDTH; iterA += TK) {
+        std::array<config_2d_mem_access<float, TN, TK / vnni_factor, 1>, WIDTH/TN> configs;
+        for (int iterB = 0; iterB < WIDTH/TN; iterB++) {
+            configs[iterB] = config_2d_mem_access<float, TN, TK / vnni_factor, 1>(
+                reinterpret_cast<float const *>(B), vnni_factor * WIDTH * sizeof(T) - 1,
+                WIDTH / vnni_factor - 1, vnni_factor * WIDTH * sizeof(T) - 1, iterB*TN, 0);
+        }
+
+        #pragma unroll
+        for (int iterB = 0; iterB < WIDTH; iterB += TN) {
+            simd<T, TK * TN> BlockB;
+            auto BlockB_float = BlockB.template bit_cast_view<float>();
+            BlockB_float =lsc_load_2d<float, TN, TK / vnni_factor, 1, false, false, cache_hint::cached, cache_hint::cached>(
+                    configs[iterB/TN]);
+            Cs.template select<TM * TN, 1>(iterB * TM) = xmx::dpas<8, TM, Tc>(BlockB, As.template select<TM * TK, 1>(0));
+        }
+
+
+#pragma unroll
+        for (int iterA = TK; iterA < WIDTH; iterA += TK) {
+            for (int iterB = 0; iterB < WIDTH/TN; iterB++) {
+                configs[iterB].set_y(iterA/vnni_factor);
+            }
+            
+            #pragma unroll
             for (int iterB = 0; iterB < WIDTH; iterB += TN) {
                 simd<T, TK * TN> BlockB;
+                //config.set_x(iterB);
                 auto BlockB_float = BlockB.template bit_cast_view<float>();
-                BlockB_float =
-                    lsc_load_2d<float, TN, TK / vnni_factor, 1, false, false, cache_hint::cached, cache_hint::cached>(
-                        reinterpret_cast<float const *>(B), vnni_factor * WIDTH * sizeof(T) - 1,
-                        WIDTH / vnni_factor - 1, vnni_factor * WIDTH * sizeof(T) - 1, iterB, iterA / vnni_factor);
+                BlockB_float =lsc_load_2d<float, TN, TK / vnni_factor, 1, false, false, cache_hint::cached, cache_hint::cached>(
+                    configs[iterB/TN]);
 
                 Cs.template select<TM * TN, 1>(iterB * TM) = xmx::dpas<8, TM, Tc>(
                     Cs.template select<TM * TN, 1>(iterB * TM), BlockB, As.template select<TM * TK, 1>(iterA * TM));
@@ -355,6 +407,7 @@ class EsimdKernels {
         static_assert(WIDTH % (2 * TN) == 0);
         // As TN == 8, even vnni'ed we would only use half the cache line using a single block.
         // Thus, we load 2 blocks at the same time.
+        Cs = static_cast<Tc>(0);
         if constexpr (WIDTH >= 4 * TN) {
             static_assert(WIDTH % (4 * TN) == 0);
             for (int iterA = 0; iterA < WIDTH; iterA += TK) {
@@ -561,7 +614,6 @@ class EsimdKernels {
                 simd<Tc, TM * WIDTH> Cs;
                 for (int layer = 0; layer < n_hidden_layers; layer++) {
                     // reset result matrices
-                    Cs = static_cast<Tc>(0);
 
                     MAD<TM, TK>(As, weights.GetMatrixPointer(layer), Cs);
 
@@ -573,9 +625,6 @@ class EsimdKernels {
                             As, intermediate_output.GetElementPointer(
                                     layer + 1, loc_row_offset, 0) /*+ (layer + 1) * M * WIDTH + layer_offset_A*/);
                 }
-
-                // generate output, i.e. last GEMM
-                Cs = static_cast<Tc>(0);
 
                 MAD<TM, TK>(As, weights.GetMatrixPointer(n_hidden_layers), Cs);
 
