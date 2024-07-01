@@ -45,14 +45,19 @@ double benchmark_training(const size_t batch_size, const int n_hidden_layers, co
     DeviceMatrices<T> out_inter_backw(n_hidden_layers + 1, batch_size, WIDTH, batch_size, WIDTH, batch_size,
                                       output_width, q);
 
-    const T input_val = static_cast<T>(0.1);
+    const T input_val = static_cast<T>(sqrt(1.0/batch_size));
     inputs.fill(input_val);
     outputs_backw.fill(0);
-    losses.fill(0);
+    const T losses_val = static_cast<T>(sqrt(1.0/batch_size));
+    losses.fill(losses_val);
 
     // need a factory here for different widths
-    SwiftNetMLP<T, WIDTH> network(q, input_width, output_width, n_hidden_layers, Activation::ReLU, Activation::None,
+    SwiftNetMLP<T, WIDTH> network(q, input_width, output_width, n_hidden_layers, Activation::None, Activation::None,
                                   Network<T>::WeightInitMode::constant_pos);
+
+    std::vector<T> new_weights(network.get_weights_matrices().nelements(), 1.0 / WIDTH);
+    network.set_weights_matrices(new_weights);
+    q.wait();
 
     Trainer<T> train(&network);
 
@@ -82,7 +87,15 @@ double benchmark_training(const size_t batch_size, const int n_hidden_layers, co
     // Now do a simple correctness check
     // TODO: check all the elements in the interm forw array.
     // expect that the output of the backward pass is 0 since losses are set to 0
-    isVectorWithinTolerance(outputs_backw.copy_to_host(), 0, 1.0e-2);
+    isVectorWithinTolerance(out_inter_forw.copy_to_host(), input_val, 1.0e-4);
+    std::cout << "out_inter_forw done." << std::endl;
+    isVectorWithinTolerance(out_inter_backw.copy_to_host(), losses_val, 1.0e-4);
+    std::cout << "out_inter_backw done." << std::endl;
+
+    auto outputs_backw_host = outputs_backw.copy_to_host();
+    isVectorWithinTolerance(outputs_backw_host, 1.0, 1.0e-4);
+    std::cout << outputs_backw_host[0] << ", " << outputs_backw_host[1] << ", " << outputs_backw_host[2] << ", "
+              << outputs_backw_host[3] << std::endl;
     std::cout << std::endl;
 
     return gflops;
