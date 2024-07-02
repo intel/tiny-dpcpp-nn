@@ -1,6 +1,9 @@
 import torch
 import intel_extension_for_pytorch
 import numpy as np
+import time
+
+
 from tiny_dpcpp_nn_pybind_module import (
     Activation,
     create_network,
@@ -63,9 +66,9 @@ class _module_function(torch.autograd.Function):
         batch_size = input.shape[0]
 
         if info["is_in_eval_mode"]:
-            output = native_tnn_module.inference(input.to(params.dtype))
+            output = native_tnn_module.inference(input)
         else:
-            output = native_tnn_module.fwd(input.to(params.dtype))
+            output = native_tnn_module.fwd(input)
 
         if batch_size > 0:
             output = output.reshape(batch_size, -1).to(input.device)
@@ -164,7 +167,7 @@ class Module(torch.nn.Module):
         if self.tnn_module.n_params():
             initial_params = self.tnn_module.initial_params()
             # This explicitely creates a tensor whose memory is managed by PyTorch in modules.py
-            cloned_params = initial_params.clone().detach()
+            cloned_params = initial_params.clone().detach().to(torch.float32)
             self.params = torch.nn.Parameter(cloned_params, requires_grad=True)
         else:
             print(
@@ -175,6 +178,9 @@ class Module(torch.nn.Module):
             )
 
     def set_params(self, params=None):
+        if not self.tnn_module.n_params():
+            return
+
         packed = params is None
 
         if params is None:
