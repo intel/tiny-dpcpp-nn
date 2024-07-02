@@ -225,13 +225,15 @@ template <typename T> class Network : public NetworkBase<T> {
     void initialize_xavier_normal(DeviceMatrices<T> &ms, const double weight_val_scaling_factor = 1.0) {
         std::random_device rd;
         std::mt19937 gen(rd());
-        double xavier_stddev = std::sqrt(2.0 / (network_width_ + network_width_));
-        std::uniform_real_distribution<> dis(-weight_val_scaling_factor * xavier_stddev,
-                                             weight_val_scaling_factor * xavier_stddev);
         std::vector<T> weight_matrix_vec(ms.nelements());
-
-        for (T &val : weight_matrix_vec) {
-            val = static_cast<T>(dis(gen));
+        size_t pos = 0;
+        for( uint32_t mat_i = 0; mat_i < ms.GetNumberOfMatrices(); ++mat_i ){
+            const auto m = ms.GetView(mat_i);
+            double stddev = weight_val_scaling_factor * std::sqrt(6.0 / (m.m() + m.n()));
+            std::uniform_real_distribution<> dis(-stddev, stddev);
+            for( size_t i = 0; i < m.nelements(); ++i, ++pos){
+                weight_matrix_vec[pos] = static_cast<T>(dis(gen));
+            }
         }
         ms.copy_from_host(weight_matrix_vec).wait();
     }
