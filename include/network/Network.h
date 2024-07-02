@@ -228,9 +228,20 @@ template <typename T> class Network : public NetworkBase<T> {
         std::vector<T> weight_matrix_vec(ms.nelements());
         size_t pos = 0;
         for( uint32_t mat_i = 0; mat_i < ms.GetNumberOfMatrices(); ++mat_i ){
-            const auto m = ms.GetView(mat_i);
-            double stddev = weight_val_scaling_factor * std::sqrt(6.0 / (m.m() + m.n()));
+            int fan_in_out = network_width_+network_width_;
+            if(mat_i == 0){
+                // round up to multiple of 16 for compatibility
+                int pad16_width = ((original_input_width_+15)/16)*16;
+                fan_in_out = pad16_width + network_width_;
+            }
+            else if(mat_i+1 == ms.GetNumberOfMatrices() ){
+                // round up to multiple of 16 for compatibility
+                int pad16_width = ((original_output_width_+15)/16)*16;
+                fan_in_out = pad16_width + network_width_;
+            }
+            double stddev = weight_val_scaling_factor * std::sqrt(6.0 / fan_in_out);
             std::uniform_real_distribution<> dis(-stddev, stddev);
+            const auto m = ms.GetView(mat_i);
             for( size_t i = 0; i < m.nelements(); ++i, ++pos){
                 weight_matrix_vec[pos] = static_cast<T>(dis(gen));
             }
