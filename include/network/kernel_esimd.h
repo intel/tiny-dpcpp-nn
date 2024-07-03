@@ -150,8 +150,9 @@ class EsimdKernels {
 
         auto e = q.submit([&](sycl::handler &cgh) {
             cgh.depends_on(deps);
-
-            cgh.parallel_for(sycl::nd_range<1>(M / TM, ITEMS_IN_WG), [=](sycl::nd_item<1> item) SYCL_ESIMD_KERNEL {
+            sycl::ext::oneapi::experimental::properties properties{
+                sycl::ext::intel::experimental::fp_control<sycl::ext::intel::experimental::fp_mode::denorm_hf_allow>};
+            cgh.parallel_for(sycl::nd_range<1>(M / TM, ITEMS_IN_WG), properties, [=](sycl::nd_item<1> item) SYCL_ESIMD_KERNEL {
                 const size_t loc_row_offset = item.get_global_linear_id() * TM;
 
                 simd<T, TM * WIDTH> As;
@@ -519,8 +520,9 @@ class EsimdKernels {
         // One Block Row has TM rows an N columns.
         auto e = q.submit([&](sycl::handler &cgh) {
             cgh.depends_on(deps);
-
-            cgh.parallel_for(sycl::nd_range<1>(M / TM, ITEMS_IN_WG), [=](sycl::nd_item<1> item) SYCL_ESIMD_KERNEL {
+            sycl::ext::oneapi::experimental::properties properties{
+                sycl::ext::intel::experimental::fp_control<sycl::ext::intel::experimental::fp_mode::denorm_hf_allow>};
+            cgh.parallel_for(sycl::nd_range<1>(M / TM, ITEMS_IN_WG), properties, [=](sycl::nd_item<1> item) SYCL_ESIMD_KERNEL {
                 const size_t loc_row_offset = item.get_global_linear_id() * TM;
 
                 // we store blocks contiguously
