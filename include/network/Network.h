@@ -225,13 +225,26 @@ template <typename T> class Network : public NetworkBase<T> {
     void initialize_xavier_normal(DeviceMatrices<T> &ms, const double weight_val_scaling_factor = 1.0) {
         std::random_device rd;
         std::mt19937 gen(rd());
-        double xavier_stddev = std::sqrt(2.0 / (network_width_ + network_width_));
-        std::uniform_real_distribution<> dis(-weight_val_scaling_factor * xavier_stddev,
-                                             weight_val_scaling_factor * xavier_stddev);
         std::vector<T> weight_matrix_vec(ms.nelements());
-
-        for (T &val : weight_matrix_vec) {
-            val = static_cast<T>(dis(gen));
+        size_t pos = 0;
+        for( uint32_t mat_i = 0; mat_i < ms.GetNumberOfMatrices(); ++mat_i ){
+            int fan_in_out = network_width_+network_width_;
+            if(mat_i == 0){
+                // round up to multiple of 16 for compatibility
+                int pad16_width = ((original_input_width_+15)/16)*16;
+                fan_in_out = pad16_width + network_width_;
+            }
+            else if(mat_i+1 == ms.GetNumberOfMatrices() ){
+                // round up to multiple of 16 for compatibility
+                int pad16_width = ((original_output_width_+15)/16)*16;
+                fan_in_out = pad16_width + network_width_;
+            }
+            double stddev = weight_val_scaling_factor * std::sqrt(6.0 / fan_in_out);
+            std::uniform_real_distribution<> dis(-stddev, stddev);
+            const auto m = ms.GetView(mat_i);
+            for( size_t i = 0; i < m.nelements(); ++i, ++pos){
+                weight_matrix_vec[pos] = static_cast<T>(dis(gen));
+            }
         }
         ms.copy_from_host(weight_matrix_vec).wait();
     }
