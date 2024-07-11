@@ -56,7 +56,7 @@ double benchmark_training(const size_t batch_size, const int n_hidden_layers, co
                                   Network<T>::WeightInitMode::constant_pos);
 
     std::vector<T> new_weights(network.get_weights_matrices().nelements(), 1.0 / WIDTH);
-    network.set_weights_matrices(new_weights);
+    network.set_weights_matrices(new_weights, false);
     q.wait();
 
     Trainer<T> train(&network);

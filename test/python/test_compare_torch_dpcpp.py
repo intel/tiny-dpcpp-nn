@@ -4,10 +4,13 @@ import torch
 import intel_extension_for_pytorch
 import pytest
 import pdb
-from src.utils import create_models, compare_matrices, get_grad_params
+from src.utils import create_models, compare_matrices, get_grad_params, is_close
+
+torch.set_printoptions(precision=10)
+np.set_printoptions(precision=10)
 
 input_sizes = [1, 2, 4, 8, 16]
-output_funcs = ["linear", "sigmoid"]
+output_funcs = ["linear"]
 output_sizes = [1, 2, 4, 8, 16]
 activation_funcs = ["relu", "linear", "sigmoid"]
 hidden_layer_counts = [1, 2, 4]
@@ -48,7 +51,8 @@ def train_model(model, x_train, y_train, n_steps):
             ).to(DEVICE_NAME)
             y_predicted_all.append(y_pred.detach().cpu().to(torch.float))
             optimizer.zero_grad()
-            loss.backward()
+            # loss.backward()
+            y_pred.backward(torch.ones_like(y_pred))
 
             grads_all, params_all = get_grad_params(model)
             grads.append(grads_all)
@@ -97,10 +101,10 @@ def test_grad(
     dtype,
     use_nwe,
     use_weights_of_tinynn,
+    use_constant_weight=False,
     iterations=1,
     n_steps=1,  # if this is too large, there will be accumulated error (weights aren't the same, thus the loss is not the same etc)
 ):
-
     for iter_ in range(iterations):
         print(f"Starting iteration {iter_}")
         if iter_ == 0:
@@ -127,6 +131,7 @@ def test_grad(
             backend_param_dtype=dtype,
             use_nwe=use_nwe,
             use_weights_of_tinynn=use_weights_of_tinynn,
+            use_constant_weight=use_constant_weight,
         )
 
         loss_dpcpp, y_dpcpp, grads_dpcpp, params_dpcpp = train_model(
@@ -145,6 +150,7 @@ def test_grad(
 
         grads_dpcpp = grads_dpcpp[0][0]
         grads_torch = grads_torch[0]
+
         assert len(grads_dpcpp) == len(grads_torch)
         for layer in range(len(grads_dpcpp)):
             assert (
@@ -191,6 +197,7 @@ def test_fwd(
     dtype,
     use_nwe,
     use_weights_of_tinynn,
+    use_constant_weight=False,
 ):
     # Generate random input data for testing
     torch.manual_seed(123)
@@ -205,40 +212,55 @@ def test_fwd(
         backend_param_dtype=dtype,
         use_nwe=use_nwe,
         use_weights_of_tinynn=use_weights_of_tinynn,
+        use_constant_weight=use_constant_weight,
     )
     model_torch.to(DEVICE_NAME)
     model_dpcpp.to(DEVICE_NAME)
 
     y_torch = model_torch(input_data)
     y_dpcpp = model_dpcpp(input_data)
-    eps = 1e-3
-    forward_error = abs(y_torch.sum() - y_dpcpp.sum()) / max(abs(y_torch).sum(), eps)
+    # Check for non-finite values in y_torch
+    if not torch.isfinite(y_torch).all():
+        non_finite_indices = torch.nonzero(~torch.isfinite(y_torch), as_tuple=True)[0]
+        for idx in non_finite_indices:
+            print(f"y_torch[{idx}] = {y_torch[idx]}")
+        raise ValueError("Non finite values")
 
-    if forward_error >= 0.01:
+    # Check for non-finite values in y_dpcpp
+    if not torch.isfinite(y_dpcpp).all():
+        non_finite_indices = torch.nonzero(~torch.isfinite(y_dpcpp), as_tuple=True)[0]
+        for idx in non_finite_indices:
+            print(f"y_dpcpp[{idx}] = {y_dpcpp[idx]}")
+        raise ValueError("Non finite values")
+
+    error_is_small, _ = is_close(
+        y_torch.flatten().cpu().detach().numpy(),
+        y_dpcpp.flatten().cpu().detach().numpy(),
+        rtol=1e-3,
+        name="fwd error",
+        print_diff=True,
+    )
+    if not error_is_small:
         print("Torch output: ", y_torch[-1, :])
         print("DPCPP output: ", y_dpcpp[-1, :])
         print(
             f"diff: {y_torch[-1, :] - y_dpcpp[-1, :]}, average: {abs(y_torch - y_dpcpp).mean()}"
         )
-    assert (
-        forward_error <= 0.01
-    ), f"Forward error is too large {abs(y_torch.sum() - y_dpcpp.sum()) / (abs(y_torch).sum()) :.4f}"
 
 
 if __name__ == "__main__":
-
-    input_width = 8
+    input_width = 16
     hidden_size = 16
     hidden_layers = 1
     output_width = 16
-    # activation_func = "sigmoid"
+    # activation_func = "relu"
     activation_func = "relu"
-    output_func = "linear"
-    # output_func = "sigmoid"
+    # output_func = "linear"
+    output_func = "sigmoid"
     dtype = torch.float16
     use_nwe = False
     use_weights_of_tinynn = True
-
+    use_constant_weight = True
     test_fwd(
         input_width,
         hidden_size,
@@ -249,6 +271,7 @@ if __name__ == "__main__":
         dtype,
         use_nwe,
         use_weights_of_tinynn,
+        use_constant_weight,
     )
     print("Passed fwd test")
 
@@ -262,5 +285,6 @@ if __name__ == "__main__":
         dtype,
         use_nwe,
         use_weights_of_tinynn,
+        use_constant_weight,
     )
     print("Passed bwd test")

@@ -376,8 +376,9 @@ template <typename T> class MLP {
     std::vector<T> getUnpackedWeights() const {
         std::vector<T> all_weights;
         for (const Matrix<T> &weight_matrix : weights) {
-
-            for (const std::vector<T> &row : weight_matrix.data) {
+            for (const std::vector<T> &row : weight_matrix.transpose().data) {
+                // using transpose as tiny-nn expects (input_width, width) as input matrix whereas we define it as
+                // (width, input_width here)
                 all_weights.insert(all_weights.end(), row.begin(), row.end());
             }
         }

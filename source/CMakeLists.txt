@@ -20,7 +20,7 @@ target_link_options(encodings INTERFACE -qmkl)
 # target_precompile_headers(encodings REUSE_FROM common)
 
 add_subdirectory(network)
-# target_compile_options(network INTERFACE -qmkl)
+target_compile_options(network INTERFACE -fp-model=precise)
 # target_link_options(network INTERFACE -qmkl)
 
 add_library(loss INTERFACE)

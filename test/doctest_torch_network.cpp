@@ -39,12 +39,13 @@ template <typename T> std::vector<T> create_padded_vector(int output_width, T ta
 
 template <typename T, typename T_ref, int WIDTH = 64>
 void test_network_backward(sycl::queue &q, const int input_width, const int output_width, const int n_hidden_layers,
-                           const int batch_size, std::string activation, std::string weight_init_mode) {
+                           const int batch_size, std::string activation, std::string output_activation,
+                           std::string weight_init_mode) {
+
     // main functionalities of backward and forward are tested in doctest_swifnet
     // here, we test only if the combination of encoding (tested in doctest_encoding) and swifnet works
     const T_ref input_val = 1.0;
     const T_ref target_val = 0.1;
-
     const int padded_output_width = WIDTH;
     const int padded_input_width = WIDTH;
 
@@ -56,12 +57,28 @@ void test_network_backward(sycl::queue &q, const int input_width, const int outp
         network_activation = Activation::ReLU;
     } else if (activation == "linear") {
         network_activation = Activation::None;
+    } else if (activation == "sigmoid") {
+        network_activation = Activation::Sigmoid;
+    } else {
+        throw std::invalid_argument("Unsupported Activation");
     }
 
-    mlp_cpp::MLP<T_ref> mlp(input_width, WIDTH, output_width, n_hidden_layers + 1, batch_size, activation, "linear",
-                            weight_init_mode);
+    Activation network_output_activation;
+    if (output_activation == "relu") {
+        network_output_activation = Activation::ReLU;
+    } else if (output_activation == "linear") {
+        network_output_activation = Activation::None;
+    } else if (output_activation == "sigmoid") {
+        network_output_activation = Activation::Sigmoid;
+    } else {
+        throw std::invalid_argument("Unsupported Output Activation");
+    }
 
-    tnn::NetworkModule<T, WIDTH> Net(input_width, output_width, n_hidden_layers, network_activation, Activation::None);
+    mlp_cpp::MLP<T_ref> mlp(input_width, WIDTH, output_width, n_hidden_layers + 1, batch_size, activation,
+                            output_activation, weight_init_mode);
+
+    tnn::NetworkModule<T, WIDTH> Net(input_width, output_width, n_hidden_layers, network_activation,
+                                     network_output_activation);
 
     std::vector<T> unpacked_weights = mlp_cpp::convert_vector<T_ref, T>(mlp.getUnpackedWeights());
     auto network_torch_params = tnn::Module::convertVectorToTensor<T>(unpacked_weights).to(c10::ScalarType::BFloat16);
@@ -110,14 +127,6 @@ void test_network_backward(sycl::queue &q, const int input_width, const int outp
 
     std::vector<T> dL_dinput_vec = tnn::Module::convertTensorToVector<T>(dL_dinput);
 
-    auto dL_dinput_ref_stacked = mlp_cpp::stack_vector(dL_dinput_ref, batch_size);
-
-    if (!areVectorsWithinTolerance(dL_dinput_vec, dL_dinput_ref_stacked, 1.0e-2)) {
-        printVector("dL_dinput_ref_stacked: ", dL_dinput_ref_stacked);
-        printVector("dL_dinput_vec: ", dL_dinput_vec);
-    }
-    CHECK(areVectorsWithinTolerance(dL_dinput_vec, dL_dinput_ref_stacked, 1.0e-2));
-
     // flatten reference grad matrices
     std::vector<double> grads_ref;
     for (const auto &matrix : grad_matrices_ref) {
@@ -135,53 +144,59 @@ void test_network_backward(sycl::queue &q, const int input_width, const int outp
         printVector("network_params_grad_vec", network_params_grad_vec);
     }
     CHECK(areVectorsWithinTolerance(network_params_grad_vec, grads_ref, 5.0e-2));
+
+    auto dL_dinput_ref_stacked = mlp_cpp::stack_vector(dL_dinput_ref, batch_size);
+
+    if (!areVectorsWithinTolerance(dL_dinput_vec, dL_dinput_ref_stacked, 1.0e-2)) {
+        printVector("dL_dinput_ref_stacked: ", dL_dinput_ref_stacked);
+        printVector("dL_dinput_vec: ", dL_dinput_vec);
+    }
+    CHECK(areVectorsWithinTolerance(dL_dinput_vec, dL_dinput_ref_stacked, 1.0e-2));
 }
 
 TEST_CASE("Network with Identity Encoding - test bwd unpadded") {
     sycl::queue q(sycl::gpu_selector_v);
     const int n_hidden_layers = 1;
 
-    auto test_function = [=](auto T_type, sycl::queue &q, const int width, const int batch_size, std::string activation,
-                             std::string weight_init_mode) {
-        using T = decltype(T_type);
-
+    auto test_function = [=](sycl::queue &q, const int width, const int batch_size, std::string activation,
+                             std::string output_activation, std::string weight_init_mode) {
+        typedef bf16 T;
         if (width == 16) {
             // Define the parameters for creating IdentityEncoding
-            test_network_backward<T, float, 16>(q, 16, 16, n_hidden_layers, batch_size, activation, weight_init_mode);
+            test_network_backward<T, double, 16>(q, 16, 16, n_hidden_layers, batch_size, activation, output_activation,
+                                                 weight_init_mode);
         } else if (width == 32) {
             // Define the parameters for creating IdentityEncoding
-            test_network_backward<T, float, 32>(q, 32, 32, n_hidden_layers, batch_size, activation, weight_init_mode);
+            test_network_backward<T, double, 32>(q, 32, 32, n_hidden_layers, batch_size, activation, output_activation,
+                                                 weight_init_mode);
         } else if (width == 64) {
             // Define the parameters for creating IdentityEncoding
-            test_network_backward<T, float, 64>(q, 64, 64, n_hidden_layers, batch_size, activation, weight_init_mode);
+            test_network_backward<T, double, 64>(q, 64, 64, n_hidden_layers, batch_size, activation, output_activation,
+                                                 weight_init_mode);
         } else if (width == 128) {
             // Define the parameters for creating IdentityEncoding
-            test_network_backward<T, float, 128>(q, 128, 128, n_hidden_layers, batch_size, activation,
-                                                 weight_init_mode);
+            test_network_backward<T, double, 128>(q, 128, 128, n_hidden_layers, batch_size, activation,
+                                                  output_activation, weight_init_mode);
         } else
             throw std::invalid_argument("Unsupported width");
     };
     const int widths[] = {16, 32, 64, 128};
     const int batch_sizes[] = {8, 16, 32, 64};
-    std::string activations[] = {"linear", "relu"};
+    std::string activations[] = {"linear", "relu", "sigmoid"};
+    std::string output_activations[] = {"linear"};
     std::string weight_init_modes[] = {"constant", "random"};
 
-    auto bf16_type = sycl::ext::oneapi::bfloat16{};
-    auto half_type = sycl::half{};
-
-    std::array<decltype(bf16_type), 2> types = {bf16_type, half_type};
-    for (auto type : types) {
-        std::string type_name = (type == bf16_type) ? "bfloat16" : "half";
-        for (int batch_size : batch_sizes) {
-            for (int width : widths) {
-                for (std::string activation : activations) {
+    for (int batch_size : batch_sizes) {
+        for (int width : widths) {
+            for (std::string activation : activations) {
+                for (std::string output_activation : output_activations) {
                     for (std::string weight_init_mode : weight_init_modes) {
-                        std::string testName = "Testing grad " + type_name + " WIDTH " + std::to_string(width) +
-                                               " - activation: " + activation +
-                                               " - weight_init_mode: " + weight_init_mode +
-                                               " - Batch size: " + std::to_string(batch_size);
+                        std::string testName =
+                            "Testing grad WIDTH " + std::to_string(width) + " - activation: " + activation +
+                            " - weight_init_mode: " + weight_init_mode + " - Batch size: " + std::to_string(batch_size);
                         SUBCASE(testName.c_str()) {
-                            CHECK_NOTHROW(test_function(type, q, width, batch_size, activation, weight_init_mode));
+                            CHECK_NOTHROW(
+                                test_function(q, width, batch_size, activation, output_activation, weight_init_mode));
                         }
                     }
                 }
@@ -195,50 +210,46 @@ TEST_CASE("Network with Identity Encoding - test bwd input padded") {
     const int n_hidden_layers = 1;
     const int input_dim = 8;
 
-    auto test_function = [=](auto T_type, sycl::queue &q, const int width, const int batch_size, std::string activation,
-                             std::string weight_init_mode) {
-        using T = decltype(T_type);
-
+    auto test_function = [=](sycl::queue &q, const int width, const int batch_size, std::string activation,
+                             std::string output_activation, std::string weight_init_mode) {
+        typedef bf16 T;
         if (width == 16) {
             // Define the parameters for creating IdentityEncoding
-            test_network_backward<T, float, 16>(q, input_dim, 16, n_hidden_layers, batch_size, activation,
-                                                weight_init_mode);
+            test_network_backward<T, double, 16>(q, input_dim, 16, n_hidden_layers, batch_size, activation,
+                                                 output_activation, weight_init_mode);
         } else if (width == 32) {
             // Define the parameters for creating IdentityEncoding
-            test_network_backward<T, float, 32>(q, input_dim, 32, n_hidden_layers, batch_size, activation,
-                                                weight_init_mode);
+            test_network_backward<T, double, 32>(q, input_dim, 32, n_hidden_layers, batch_size, activation,
+                                                 output_activation, weight_init_mode);
         } else if (width == 64) {
             // Define the parameters for creating IdentityEncoding
-            test_network_backward<T, float, 64>(q, input_dim, 64, n_hidden_layers, batch_size, activation,
-                                                weight_init_mode);
+            test_network_backward<T, double, 64>(q, input_dim, 64, n_hidden_layers, batch_size, activation,
+                                                 output_activation, weight_init_mode);
         } else if (width == 128) {
             // Define the parameters for creating IdentityEncoding
-            test_network_backward<T, float, 128>(q, input_dim, 128, n_hidden_layers, batch_size, activation,
-                                                 weight_init_mode);
+            test_network_backward<T, double, 128>(q, input_dim, 128, n_hidden_layers, batch_size, activation,
+                                                  output_activation, weight_init_mode);
         } else
             throw std::invalid_argument("Unsupported width");
     };
     const int widths[] = {16, 32, 64, 128};
     const int batch_sizes[] = {8, 16, 32, 64};
-    std::string activations[] = {"linear", "relu"};
+    std::string activations[] = {"linear", "relu", "sigmoid"};
+    std::string output_activations[] = {"linear"};
     std::string weight_init_modes[] = {"constant", "random"};
 
-    auto bf16_type = sycl::ext::oneapi::bfloat16{};
-    auto half_type = sycl::half{};
+    for (int batch_size : batch_sizes) {
+        for (int width : widths) {
+            for (std::string activation : activations) {
+                for (std::string output_activation : output_activations) {
 
-    std::array<decltype(bf16_type), 2> types = {bf16_type, half_type};
-    for (auto type : types) {
-        std::string type_name = (type == bf16_type) ? "bfloat16" : "half";
-        for (int batch_size : batch_sizes) {
-            for (int width : widths) {
-                for (std::string activation : activations) {
                     for (std::string weight_init_mode : weight_init_modes) {
-                        std::string testName = "Testing grad " + type_name + " WIDTH " + std::to_string(width) +
-                                               " - activation: " + activation +
-                                               " - weight_init_mode: " + weight_init_mode +
-                                               " - Batch size: " + std::to_string(batch_size);
+                        std::string testName =
+                            "Testing grad WIDTH " + std::to_string(width) + " - activation: " + activation +
+                            " - weight_init_mode: " + weight_init_mode + " - Batch size: " + std::to_string(batch_size);
                         SUBCASE(testName.c_str()) {
-                            CHECK_NOTHROW(test_function(type, q, width, batch_size, activation, weight_init_mode));
+                            CHECK_NOTHROW(
+                                test_function(q, width, batch_size, activation, output_activation, weight_init_mode));
                         }
                     }
                 }
@@ -252,51 +263,45 @@ TEST_CASE("Network with Identity Encoding - test bwd output padded") {
     const int n_hidden_layers = 1;
     const int output_dim = 8;
 
-    auto test_function = [=](auto T_type, sycl::queue &q, const int width, const int batch_size, std::string activation,
-                             std::string weight_init_mode) {
-        using T = decltype(T_type);
-
+    auto test_function = [=](sycl::queue &q, const int width, const int batch_size, std::string activation,
+                             std::string output_activation, std::string weight_init_mode) {
+        typedef bf16 T;
         if (width == 16) {
             // Define the parameters for creating IdentityEncoding
-            test_network_backward<T, float, 16>(q, 16, output_dim, n_hidden_layers, batch_size, activation,
-                                                weight_init_mode);
+            test_network_backward<T, double, 16>(q, 16, output_dim, n_hidden_layers, batch_size, activation,
+                                                 output_activation, weight_init_mode);
         } else if (width == 32) {
             // Define the parameters for creating IdentityEncoding
-            test_network_backward<T, float, 32>(q, 32, output_dim, n_hidden_layers, batch_size, activation,
-                                                weight_init_mode);
+            test_network_backward<T, double, 32>(q, 32, output_dim, n_hidden_layers, batch_size, activation,
+                                                 output_activation, weight_init_mode);
         } else if (width == 64) {
             // Define the parameters for creating IdentityEncoding
-            test_network_backward<T, float, 64>(q, 64, output_dim, n_hidden_layers, batch_size, activation,
-                                                weight_init_mode);
+            test_network_backward<T, double, 64>(q, 64, output_dim, n_hidden_layers, batch_size, activation,
+                                                 output_activation, weight_init_mode);
         } else if (width == 128) {
             // Define the parameters for creating IdentityEncoding
-            test_network_backward<T, float, 128>(q, 128, output_dim, n_hidden_layers, batch_size, activation,
-                                                 weight_init_mode);
+            test_network_backward<T, double, 128>(q, 128, output_dim, n_hidden_layers, batch_size, activation,
+                                                  output_activation, weight_init_mode);
         } else
             throw std::invalid_argument("Unsupported width");
     };
     const int widths[] = {16, 32, 64, 128};
     const int batch_sizes[] = {8, 16, 32, 64};
-    std::string activations[] = {"linear", "relu"};
+    std::string activations[] = {"linear", "relu", "sigmoid"};
+    std::string output_activations[] = {"linear"};
     std::string weight_init_modes[] = {"constant", "random"};
 
-    auto bf16_type = sycl::ext::oneapi::bfloat16{};
-    auto half_type = sycl::half{};
-
-    std::array<decltype(bf16_type), 2> types = {bf16_type, half_type};
-    for (auto type : types) {
-        std::string type_name = (type == bf16_type) ? "bfloat16" : "half";
-
-        for (int batch_size : batch_sizes) {
-            for (int width : widths) {
-                for (std::string activation : activations) {
+    for (int batch_size : batch_sizes) {
+        for (int width : widths) {
+            for (std::string activation : activations) {
+                for (std::string output_activation : output_activations) {
                     for (std::string weight_init_mode : weight_init_modes) {
-                        std::string testName = "Testing grad " + type_name + " WIDTH " + std::to_string(width) +
-                                               " - activation: " + activation +
-                                               " - weight_init_mode: " + weight_init_mode +
-                                               " - Batch size: " + std::to_string(batch_size);
+                        std::string testName =
+                            "Testing grad WIDTH " + std::to_string(width) + " - activation: " + activation +
+                            " - weight_init_mode: " + weight_init_mode + " - Batch size: " + std::to_string(batch_size);
                         SUBCASE(testName.c_str()) {
-                            CHECK_NOTHROW(test_function(type, q, width, batch_size, activation, weight_init_mode));
+                            CHECK_NOTHROW(
+                                test_function(q, width, batch_size, activation, output_activation, weight_init_mode));
                         }
                     }
                 }

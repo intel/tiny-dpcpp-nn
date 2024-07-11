@@ -2,7 +2,6 @@ import torch
 import pytest
 import intel_extension_for_pytorch
 from torch.utils.data import DataLoader, TensorDataset
-import matplotlib.pyplot as plt
 from src.utils import create_models
 from tiny_dpcpp_nn import Network, Encoding, NetworkWithInputEncoding
 
@@ -92,6 +91,7 @@ def test_regression(dtype, optimiser):
         input_dtype=torch.float if USE_NWE else dtype,
         backend_param_dtype=dtype,
         use_weights_of_tinynn=True,
+        store_params_as_full_precision=False,
     )
 
     def criterion(y_pred, y_true):
@@ -298,7 +298,7 @@ def test_network(dtype, optimiser):
     # Evaluate after training
     final_accuracy = evaluate(mlp, X, y)
     print(f"Final Accuracy for Network: {final_accuracy:.4f}")
-    assert final_accuracy == 0.8
+    assert final_accuracy >= 0.9
 
 
 @pytest.mark.parametrize(
@@ -417,7 +417,7 @@ def run_test_network_with_custom_encoding(
     final_accuracy = evaluate(nwe, X, y)
     print(f"Final Accuracy: {final_accuracy:.4f}")
     assert (
-        final_accuracy > 0.8
+        final_accuracy > 0.95
     )  # Adjusted expectation as perfect accuracy may not be realistic
 
 
@@ -496,12 +496,12 @@ def test_network_with_encoding_all(dtype, optimiser):
 
 
 if __name__ == "__main__":
-    dtype = torch.bfloat16
+    dtype = torch.float16
     optimiser = "sgd"
-    # test_regression(dtype, optimiser)
+    test_regression(dtype, optimiser)
 
     optimiser = "sgd"
-    # dtype = torch.float16
+    dtype = torch.float16
     print("Testing network")
     test_network(dtype, optimiser)
 

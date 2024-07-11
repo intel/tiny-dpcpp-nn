@@ -20,6 +20,8 @@
 #include <sstream>
 #include <vector>
 
+// Uncomment the following line to enable printing
+#define ENABLE_PRINTING
 template <typename T> double GetInfNorm(const std::vector<T> &v) {
     double norm = 0.0;
     for (auto val : v) {
@@ -81,7 +83,6 @@ bool isVectorWithinTolerance(const std::vector<Tval> &value, const Ttarget targe
 template <typename Tval, typename Ttarget>
 bool areVectorsWithinTolerance(const std::vector<Tval> &value, const std::vector<Ttarget> &target,
                                const double tolerance) {
-
     bool is_same = true;
     double max_diff = 0.0;
     const double inf_diff = GetInfNorm(GetAbsDiff(value, target));
@@ -130,6 +131,7 @@ template <typename Iterator> void printElements(Iterator begin, Iterator end, co
 
 template <typename T>
 void printVector(const std::string &name, const std::vector<T> &vec, int break_every = 0, int cutoff_val = 128) {
+#ifdef ENABLE_PRINTING
     std::cout << "================================" << name << "============================" << std::endl;
     const size_t vec_size = vec.size();
     int counter = 0;
@@ -161,4 +163,5 @@ void printVector(const std::string &name, const std::vector<T> &vec, int break_e
         }
     }
     std::cout << std::endl;
+#endif
 }
