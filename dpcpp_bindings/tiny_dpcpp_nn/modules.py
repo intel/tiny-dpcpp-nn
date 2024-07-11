@@ -3,18 +3,6 @@ import intel_extension_for_pytorch
 import numpy as np
 import time
 
-class Timer:    
-    def __init__(self, name):
-        self.name = name
-
-    def __enter__(self):
-        self.start = time.time()
-        return self
-
-    def __exit__(self, *args):
-        self.end = time.time()
-        self.interval = self.end - self.start
-        print(f'{self.name} {self.interval}', flush=True)
 
 from tiny_dpcpp_nn_pybind_module import (
     Activation,
@@ -80,8 +68,7 @@ class _module_function(torch.autograd.Function):
         if info["is_in_eval_mode"]:
             output = native_tnn_module.inference(input)
         else:
-            with Timer(f'forward {input.shape}'):
-                output = native_tnn_module.fwd(input)
+            output = native_tnn_module.fwd(input)
 
         if batch_size > 0:
             output = output.reshape(batch_size, -1).to(input.device)
@@ -118,39 +105,38 @@ class _module_function(torch.autograd.Function):
 
         batch_size = input.shape[0]
         doutput = doutput * loss_scale
-        with Timer(f'backward {input.shape}'):
-            with torch.no_grad():
-                if "encoding_config" in ctx.info:
-                    input_grad = None
+        with torch.no_grad():
+            if "encoding_config" in ctx.info:
+                input_grad = None
 
-                    if batch_size == 0:
-                        grad = torch.zeros_like(params)
-                    elif "width" in ctx.info:
-                        # this is NWE with grid encoding
-                        pack_weights = True
-                        _, grad = ctx.native_tnn_module.bwd_with_encoding_grad(
-                            doutput,
-                            input,
-                            pack_weights,
-                            False,  # pack the grad, don't get dldinput
-                        )
-                    else:
-                        pack_weights = False
-                        # this is pure encoding module
-                        _, grad = ctx.native_tnn_module.bwd_with_encoding_grad(
-                            doutput,
-                            input,
-                            pack_weights,
-                            False,  # don't pack the grad, don't get dldinput
-                        )
-                else:
-                    # This is Network only
+                if batch_size == 0:
+                    grad = torch.zeros_like(params)
+                elif "width" in ctx.info:
+                    # this is NWE with grid encoding
                     pack_weights = True
-                    input_grad, grad = ctx.native_tnn_module.bwd_no_encoding_grad(
-                        doutput, pack_weights, True  # pack the grad, get dldinput
+                    _, grad = ctx.native_tnn_module.bwd_with_encoding_grad(
+                        doutput,
+                        input,
+                        pack_weights,
+                        False,  # pack the grad, don't get dldinput
                     )
-                    if input_grad is not None:
-                        input_grad = input_grad.reshape(batch_size, -1)
+                else:
+                    pack_weights = False
+                    # this is pure encoding module
+                    _, grad = ctx.native_tnn_module.bwd_with_encoding_grad(
+                        doutput,
+                        input,
+                        pack_weights,
+                        False,  # don't pack the grad, don't get dldinput
+                    )
+            else:
+                # This is Network only
+                pack_weights = True
+                input_grad, grad = ctx.native_tnn_module.bwd_no_encoding_grad(
+                    doutput, pack_weights, True  # pack the grad, get dldinput
+                )
+                if input_grad is not None:
+                    input_grad = input_grad.reshape(batch_size, -1)
 
         grad = None if grad is None else (grad / loss_scale)
         input_grad = None if input_grad is None else (input_grad / loss_scale)
