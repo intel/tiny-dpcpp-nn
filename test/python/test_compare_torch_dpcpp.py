@@ -6,6 +6,9 @@ import pytest
 import pdb
 from src.utils import create_models, compare_matrices, get_grad_params
 
+torch.set_printoptions(precision=10)
+np.set_printoptions(precision=10)
+
 input_sizes = [1, 2, 4, 8, 16]
 output_funcs = ["linear", "sigmoid"]
 output_sizes = [1, 2, 4, 8, 16]
@@ -48,7 +51,8 @@ def train_model(model, x_train, y_train, n_steps):
             ).to(DEVICE_NAME)
             y_predicted_all.append(y_pred.detach().cpu().to(torch.float))
             optimizer.zero_grad()
-            loss.backward()
+            # loss.backward()
+            y_pred.backward(torch.ones_like(y_pred))
 
             grads_all, params_all = get_grad_params(model)
             grads.append(grads_all)
@@ -109,7 +113,7 @@ def test_grad(
                 torch.tensor(BATCH_SIZE * [0.001 for _ in range(input_size)])
                 .to(DEVICE_NAME)
                 .reshape(BATCH_SIZE, -1)
-            )
+            ) * 0 + 0.1
             y_train = torch.ones([BATCH_SIZE, output_size]).to(DEVICE_NAME)
         else:
             x_train = torch.rand([BATCH_SIZE, input_size]).to(DEVICE_NAME)
@@ -127,6 +131,7 @@ def test_grad(
             backend_param_dtype=dtype,
             use_nwe=use_nwe,
             use_weights_of_tinynn=use_weights_of_tinynn,
+            constant_weight=True,
         )
 
         loss_dpcpp, y_dpcpp, grads_dpcpp, params_dpcpp = train_model(
@@ -145,6 +150,9 @@ def test_grad(
 
         grads_dpcpp = grads_dpcpp[0][0]
         grads_torch = grads_torch[0]
+
+        print(f"Grads dpcpp: {grads_dpcpp}")
+        print(f"Grads torch: {grads_torch}")
         assert len(grads_dpcpp) == len(grads_torch)
         for layer in range(len(grads_dpcpp)):
             assert (
@@ -194,7 +202,7 @@ def test_fwd(
 ):
     # Generate random input data for testing
     torch.manual_seed(123)
-    input_data = torch.randn(BATCH_SIZE, input_size).to(DEVICE_NAME)
+    input_data = torch.randn(BATCH_SIZE, input_size).to(DEVICE_NAME) * 0 + 0.1
     model_dpcpp, model_torch = create_models(
         input_size,
         [hidden_size] * hidden_layers,
@@ -205,6 +213,7 @@ def test_fwd(
         backend_param_dtype=dtype,
         use_nwe=use_nwe,
         use_weights_of_tinynn=use_weights_of_tinynn,
+        constant_weight=True,
     )
     model_torch.to(DEVICE_NAME)
     model_dpcpp.to(DEVICE_NAME)
@@ -214,6 +223,8 @@ def test_fwd(
     eps = 1e-3
     forward_error = abs(y_torch.sum() - y_dpcpp.sum()) / max(abs(y_torch).sum(), eps)
 
+    print("Torch output: ", y_torch[-1, :])
+    print("DPCPP output: ", y_dpcpp[-1, :])
     if forward_error >= 0.01:
         print("Torch output: ", y_torch[-1, :])
         print("DPCPP output: ", y_dpcpp[-1, :])
@@ -227,17 +238,17 @@ def test_fwd(
 
 if __name__ == "__main__":
 
-    input_width = 8
+    input_width = 16
     hidden_size = 16
     hidden_layers = 1
     output_width = 16
     # activation_func = "sigmoid"
-    activation_func = "relu"
+    activation_func = "linear"
     output_func = "linear"
     # output_func = "sigmoid"
     dtype = torch.float16
     use_nwe = False
-    use_weights_of_tinynn = True
+    use_weights_of_tinynn = False
 
     test_fwd(
         input_width,

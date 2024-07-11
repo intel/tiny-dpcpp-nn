@@ -17,6 +17,7 @@ class MLP(torch.nn.Module):
         nwe_as_ref=False,  # NetworkWithEncoding (padded input as ones) is used as ref
         dtype=torch.bfloat16,
         constant_weight=False,
+        weight_val=0.1,
     ):
         super().__init__()
         self.dtype = dtype
@@ -35,7 +36,7 @@ class MLP(torch.nn.Module):
             input_dim, hidden_sizes[0], bias=BIAS, dtype=self.dtype
         )
         if constant_weight:
-            torch.nn.init.constant_(input_layer.weight, 0.1)
+            torch.nn.init.constant_(input_layer.weight, weight_val)
         self.layers.append(input_layer)
 
         # Hidden layers
@@ -44,7 +45,7 @@ class MLP(torch.nn.Module):
                 hidden_sizes[i - 1], hidden_sizes[i], bias=BIAS, dtype=self.dtype
             )
             if constant_weight:
-                torch.nn.init.constant_(hidden_layer.weight, 0.1)
+                torch.nn.init.constant_(hidden_layer.weight, weight_val)
             self.layers.append(hidden_layer)
 
         # Output layer
@@ -52,7 +53,7 @@ class MLP(torch.nn.Module):
             hidden_sizes[-1], output_size, bias=BIAS, dtype=self.dtype
         )
         if constant_weight:
-            torch.nn.init.constant_(output_layer.weight, 0.1)
+            torch.nn.init.constant_(output_layer.weight, weight_val)
         self.layers.append(output_layer)
 
     def forward(self, x):
@@ -85,22 +86,22 @@ class MLP(torch.nn.Module):
         return x_changed_dtype
 
     def _apply_activation(self, x, activation_func):
-        if activation_func == "relu":
+        if activation_func.lower() == "relu":
             return F.relu(x)
-        elif activation_func == "leaky_relu":
+        elif activation_func.lower() == "leaky_relu":
             return F.leaky_relu(x)
-        elif activation_func == "sigmoid":
+        elif activation_func.lower() == "sigmoid":
             return torch.sigmoid(x)
-        elif activation_func == "tanh":
+        elif activation_func.lower() == "tanh":
             return torch.tanh(x)
         elif (
-            (activation_func == "None")
+            (activation_func.lower() == "none")
             or (activation_func is None)
-            or (activation_func == "linear")
+            or (activation_func.lower() == "linear")
         ):
             return x
         else:
-            raise ValueError("Invalid activation function")
+            raise ValueError(f"Invalid activation function: {activation_func}")
 
     def set_weights(self, parameters):
         for i, weight in enumerate(parameters):

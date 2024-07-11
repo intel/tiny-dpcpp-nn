@@ -65,6 +65,7 @@ def create_models(
     backend_param_dtype,
     use_nwe,
     use_weights_of_tinynn,
+    constant_weight=False,
 ):
 
     # Create and test CustomMLP
@@ -76,6 +77,7 @@ def create_models(
         output_func,
         dtype=backend_param_dtype,
         nwe_as_ref=use_nwe,
+        constant_weight=constant_weight,
     )
 
     network_config = {
