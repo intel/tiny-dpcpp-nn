@@ -31,7 +31,7 @@ class MLP(torch.nn.Module):
         self.output_activation = output_activation
 
         # Input layer
-        input_dim = hidden_sizes[0]
+        input_dim = hidden_sizes[0]  # we pad in forward
         input_layer = torch.nn.Linear(
             input_dim, hidden_sizes[0], bias=BIAS, dtype=self.dtype
         )
@@ -106,7 +106,9 @@ class MLP(torch.nn.Module):
     def set_weights(self, parameters):
         for i, weight in enumerate(parameters):
             assert weight.dtype == self.dtype
-            assert self.layers[i].weight.shape == weight.shape
+            assert (
+                self.layers[i].weight.shape == weight.shape
+            ), f"In layer {i} - self layer shape: {self.layers[i].weight.shape}, passed shape: {weight.shape}"
             self.layers[i].weight = torch.nn.Parameter(weight)
 
     def get_all_weights(self):
@@ -127,7 +129,8 @@ class MLP(torch.nn.Module):
                 elif weight.shape[1] != self.width:
                     padding = (0, self.width - weight.shape[1])  # pad last dim
                     weight = torch.nn.functional.pad(weight, padding, "constant", 0)
-                weights.append(weight)
+                # transpose as in tiny-dpcpp-nn swiftnet, the matrices are transposed
+                weights.append(weight.T)
         return torch.stack(weights)
 
     def get_all_grads(self):

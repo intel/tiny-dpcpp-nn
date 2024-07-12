@@ -1,6 +1,8 @@
 import numpy as np
 import torch
+import pytest
 from src.mlp import MLP
+from src.utils import get_reshaped_params, is_close
 
 if torch.cuda.is_available():
     import tinycudann as tcnn
@@ -19,32 +21,13 @@ to_numpy = lambda a: a.detach().cpu().numpy()
 torch.manual_seed(42)
 
 
-def is_close(reference, value, rtol=1e-4, name="", print_diff=False):
-    assert len(reference.shape) == 1, "Reference should be a flat vector"
-    assert len(value.shape) == 1, "Value should be a flat vector"
+def get_gradient_ref(input, weight_val, config, weights=None, dtype=torch.float32):
+    if weight_val == "random":
+        weight_val = 0.0
+        constant_weight = False
+    else:
+        constant_weight = True
 
-    max_val = np.maximum(np.max(np.abs(reference)), np.max(np.abs(value)))
-    max_rtol = 0.0
-    # Perform the element-wise comparison
-    isclose = True
-    for i, (a, b) in enumerate(zip(reference, value)):
-        abs_diff = np.abs(a - b)
-        rel_diff = abs_diff / max_val
-        if rel_diff > max_rtol:
-            max_rtol = rel_diff
-        if rel_diff > rtol:
-            isclose = False
-            if print_diff:
-                string = f" of {name}" if name else "name"
-                print(f"Element {i}{string}:")
-                print(f"  Value in reference (cuda): {a}")
-                print(f"  Value in value (dpcpp): {b}")
-                print(f"  Absolute difference: {abs_diff}")
-                print(f"  Relative difference: {rel_diff} with rtol {rtol}")
-    return isclose, max_rtol
-
-
-def get_gradient_ref(input, weight_val, config, dtype=torch.float32):
     model = MLP(
         config["n_neurons"],
         [config["n_neurons"]] * config["n_hidden_layers"],
@@ -52,9 +35,13 @@ def get_gradient_ref(input, weight_val, config, dtype=torch.float32):
         activation_func=config["activation"],
         output_activation=config["output_activation"],
         dtype=dtype,
-        constant_weight=True,
+        constant_weight=constant_weight,
         weight_val=weight_val,
     ).to(device)
+
+    if weight_val == "random":
+        model.set_weights(weights)
+
     y_ref = model(input.to(device))
     y_ref.backward(torch.ones_like(y_ref))
     grads_all = []
@@ -89,6 +76,11 @@ def run_config(config, weight_val, input_val):
         .sample(network.params.shape)
         .to(device)
     )
+    # params = (
+    #     torch.linspace(1, network.params.numel(), steps=network.params.numel())
+    #     .reshape(network.params.shape)
+    #     .to(device)
+    # )
 
     if weight_val != "random":
         params = params * 0 + weight_val
@@ -109,6 +101,7 @@ def run_config(config, weight_val, input_val):
 
     y = network(x)
     y.backward(torch.ones_like(y))
+
     weight_val_string = (
         f"1e{np.log10(weight_val):.0f}" if weight_val != "random" else "random"
     )
@@ -129,11 +122,25 @@ def run_config(config, weight_val, input_val):
             params_grad=to_numpy(network.params.grad),
         )
     elif device == "xpu":
+        reshaped_params = get_reshaped_params(
+            params,
+            config["n_neurons"],
+            config["n_neurons"],
+            config["n_neurons"],
+            config["n_hidden_layers"],
+            torch.float32,
+            device,
+            "reshape",
+        )
         reference_grads_single_precision, reference_params_single_precision = (
-            get_gradient_ref(x, weight_val, config, dtype=torch.float32)
+            get_gradient_ref(
+                x, weight_val, config, weights=reshaped_params, dtype=torch.float32
+            )
         )
         reference_grads_half_precision, reference_params_half_precision = (
-            get_gradient_ref(x, weight_val, config, dtype=torch.float16)
+            get_gradient_ref(
+                x, weight_val, config, weights=reshaped_params, dtype=torch.float16
+            )
         )
 
         # Decide rtol_ref by comparing the rtol diff between reference in fp16 and fp32
@@ -197,18 +204,42 @@ def run_config(config, weight_val, input_val):
             ), "Cuda reference is close to reference, but dpcpp is not close to cuda reference. Manually check"
 
 
-if __name__ == "__main__":
+@pytest.mark.parametrize("activation_func", ["relu", "none", "sigmoid"])
+@pytest.mark.parametrize("hidden_layer_count", [1, 2, 4])
+@pytest.mark.parametrize("hidden_size", [16, 32, 64, 128])
+@pytest.mark.parametrize(
+    "input_val", [10**exponent for exponent in range(-5, 5)] + ["random"]
+)
+@pytest.mark.parametrize(
+    "params_val", [10**exponent for exponent in range(-5, 5)] + ["random"]
+)
+def test_mlp_gradient(
+    activation_func, hidden_layer_count, hidden_size, input_val, params_val
+):
+    config = {
+        "otype": "FullyFusedMLP",
+        "activation": activation_func,
+        "output_activation": activation_func,  # Adjust as necessary
+        "n_neurons": hidden_size,
+        "n_hidden_layers": hidden_layer_count,
+        "device": device,
+    }
+    run_config(config, params_val, input_val)
 
-    activation_funcs = ["none"]
-    hidden_layer_counts = [1]
-    hidden_sizes = [16]
-    input_vals = [0.1]
-    params_vals = [0.1]
-    # activation_funcs = ["relu", "none", "sigmoid"]
-    # hidden_layer_counts = [1, 2, 4]
-    # hidden_sizes = [16, 32, 64, 128]
-    # input_vals = [10**exponent for exponent in range(-5, 5)] + ["random"]
-    # params_vals = [10**exponent for exponent in range(-5, 5)] + ["random"]
+
+if __name__ == "__main__":
+    # pytest.main()
+
+    # activation_funcs = ["none"]
+    # hidden_layer_counts = [1]
+    # hidden_sizes = [16]
+    # input_vals = [10 ** (-1)]
+    # params_vals = [10 ** (-1)]
+    activation_funcs = ["relu", "none", "sigmoid"]
+    hidden_layer_counts = [1, 2, 4]
+    hidden_sizes = [16, 32, 64, 128]
+    input_vals = [10**exponent for exponent in range(-5, 5)] + ["random"]
+    params_vals = [10**exponent for exponent in range(-5, 5)] + ["random"]
 
     for output_fn in activation_funcs:
         for activation_fn in activation_funcs:

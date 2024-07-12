@@ -20,6 +20,8 @@
 #include <sstream>
 #include <vector>
 
+// Uncomment the following line to enable printing
+// #define ENABLE_PRINTING
 template <typename T> double GetInfNorm(const std::vector<T> &v) {
     double norm = 0.0;
     for (auto val : v) {
@@ -130,6 +132,7 @@ template <typename Iterator> void printElements(Iterator begin, Iterator end, co
 
 template <typename T>
 void printVector(const std::string &name, const std::vector<T> &vec, int break_every = 0, int cutoff_val = 128) {
+#ifdef ENABLE_PRINTING
     std::cout << "================================" << name << "============================" << std::endl;
     const size_t vec_size = vec.size();
     int counter = 0;
@@ -161,4 +164,5 @@ void printVector(const std::string &name, const std::vector<T> &vec, int break_e
         }
     }
     std::cout << std::endl;
+#endif
 }

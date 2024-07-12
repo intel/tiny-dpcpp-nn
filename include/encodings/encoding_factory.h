@@ -103,12 +103,8 @@ template <typename T> class EncodingFactoryRegistry {
 };
 
 void check_validity_of_config(const json &config) {
-    if( !config.contains("check_config") || config["check_config"] == false ){
-        return;
-    }
     // Define a list of all possible encoding parameters, see encoding.h
     const std::vector<std::string> valid_keys = {
-        "check_config",
         EncodingParams::ENCODING,
         EncodingParams::N_DIMS_TO_ENCODE,
         EncodingParams::GRID_TYPE,

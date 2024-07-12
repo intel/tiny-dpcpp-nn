@@ -71,7 +71,7 @@ void test_inference_1layer(sycl::queue &q, const int input_width, const int outp
         out_ref[output_idx] =
             nonzero_value * weight_val * input_width * input_val * network.get_network_width() * weight_val;
     }
-    CHECK(areVectorsWithinTolerance(network_output.copy_to_host(), out_ref, 1e-2));
+    CHECK(areVectorsWithinTolerance(network_output.copy_to_host(), out_ref, 1.0e-2));
 }
 
 template <typename T, int WIDTH>
@@ -115,7 +115,7 @@ void test_forward_1layer(sycl::queue &q, const int input_width, const int output
         const int nonzero_value = (output_idx % network.get_output_width()) < output_width ? 1 : 0;
         const double ref_result =
             nonzero_value * weight_val * input_width * input_val * network.get_network_width() * weight_val;
-        CHECK(static_cast<double>(fwd_host[i]) == doctest::Approx(ref_result).epsilon(1e-2));
+        CHECK(static_cast<double>(fwd_host[i]) == doctest::Approx(ref_result).epsilon(1.0e-2));
     }
 }
 
@@ -159,6 +159,8 @@ void test_grads(sycl::queue &q, const int input_width, const int output_width, c
     loss.fill(0.0f).wait();
 
     DeviceMatrix<float> targets(batch_size, padded_output_width, q);
+    targets.fill(0.0f).wait();
+
     targets.fillSubmatrixWithValue(0, 0, batch_size, output_width, static_cast<float>(target_val));
 
     L2Loss<T> l2_loss;
@@ -190,6 +192,7 @@ void test_grads(sycl::queue &q, const int input_width, const int output_width, c
 
     // sanity check whether set_weights worked
     DeviceMatrix<T> network_input(batch_size, network.get_input_width(), q);
+    network_input.fill((T)0).wait();
     std::vector<T> input_full = mlp_cpp::stack_vector(mlp_cpp::convert_vector<double, T>(input_ref), batch_size);
     network_input.copy_from_host(input_full).wait();
 
@@ -199,8 +202,8 @@ void test_grads(sycl::queue &q, const int input_width, const int output_width, c
     auto interm_forw_vec = interm_forw.copy_to_host();
 
     if (!areVectorsWithinTolerance(interm_forw_vec, interm_forw_ref, 1.0e-2)) {
-        // printVector("interm_forw_vec: ", interm_forw_vec);
-        // printVector("interm_forw_ref: ", interm_forw_ref);
+        printVector("interm_forw_vec: ", interm_forw_vec);
+        printVector("interm_forw_ref: ", interm_forw_ref);
     }
     CHECK(areVectorsWithinTolerance(interm_forw_vec, interm_forw_ref, 1.0e-2));
 
@@ -212,8 +215,8 @@ void test_grads(sycl::queue &q, const int input_width, const int output_width, c
 
     bool grads_within_tolerance = areVectorsWithinTolerance(dL_doutput_vec, stacked_dL_doutput_ref, 1.0e-2);
     if (!grads_within_tolerance) {
-        // printVector("stacked_dL_doutput_ref", stacked_dL_doutput_ref, 0, -1);
-        // printVector("dL_doutput_vec", dL_doutput_vec, 0, -1);
+        printVector("stacked_dL_doutput_ref", stacked_dL_doutput_ref, 0, -1);
+        printVector("dL_doutput_vec", dL_doutput_vec, 0, -1);
     }
     CHECK(areVectorsWithinTolerance(dL_doutput_vec, stacked_dL_doutput_ref, 1.0e-2));
 
@@ -249,8 +252,8 @@ void test_grads(sycl::queue &q, const int input_width, const int output_width, c
                                     1.0e-2)); // sanity check, being tested in test_interm_backw
 
     if (!areVectorsWithinTolerance(grad_vec, grads_ref, 1.0e-2)) {
-        // printVector("grads_ref", grads_ref);
-        // printVector("grad_vec", grad_vec);
+        printVector("grads_ref", grads_ref);
+        printVector("grad_vec", grad_vec);
     }
     CHECK(areVectorsWithinTolerance(grad_vec, grads_ref, 1.0e-2));
 }
@@ -332,8 +335,8 @@ void test_interm_backw(sycl::queue &q, const int input_width, const int output_w
     auto interm_forw_vec = interm_forw.copy_to_host();
 
     if (!areVectorsWithinTolerance(interm_forw_vec, interm_forw_ref, 1.0e-2)) {
-        // printVector("interm_forw_vec: ", interm_forw_vec);
-        // printVector("interm_forw_ref: ", interm_forw_ref);
+        printVector("interm_forw_vec: ", interm_forw_vec);
+        printVector("interm_forw_ref: ", interm_forw_ref);
     }
     CHECK(areVectorsWithinTolerance(interm_forw_vec, interm_forw_ref, 1.0e-2));
 
@@ -362,8 +365,8 @@ void test_interm_backw(sycl::queue &q, const int input_width, const int output_w
         }
 
         if (!areVectorsWithinTolerance(interm_backw_sliced_actual, interm_backw_ref, 1.0e-2)) {
-            // printVector("interm_backw_ref: ", interm_backw_ref);
-            // printVector("interm_backw_vec: ", interm_backw_sliced_actual);
+            printVector("interm_backw_ref: ", interm_backw_ref);
+            printVector("interm_backw_vec: ", interm_backw_sliced_actual);
         }
         CHECK(areVectorsWithinTolerance(interm_backw_sliced_actual, interm_backw_ref, 1.0e-2));
     }
@@ -421,7 +424,6 @@ void test_dl_dinput(sycl::queue &q, const int input_width, const int output_widt
     SwiftNetMLP<T, WIDTH> network(q, input_width, output_width, n_hidden_layers, network_activation,
                                   network_output_activation, Network<T>::WeightInitMode::constant_pos);
     std::vector<T> unpacked_weights = mlp_cpp::convert_vector<double, T>(mlp.getUnpackedWeights());
-
     network.set_weights_matrices(unpacked_weights, false);
     DeviceMatrices<T> interm_forw(network.get_n_hidden_layers() + 2, batch_size, network.get_input_width(), batch_size,
                                   network.get_network_width(), batch_size, network.get_output_width(), q);
@@ -447,8 +449,8 @@ void test_dl_dinput(sycl::queue &q, const int input_width, const int output_widt
     auto interm_forw_vec = interm_forw.copy_to_host();
 
     if (!areVectorsWithinTolerance(interm_forw_vec, interm_forw_ref, 1.0e-2)) {
-        // printVector("interm_forw_vec: ", interm_forw_vec);
-        // printVector("interm_forw_ref: ", interm_forw_ref);
+        printVector("interm_forw_vec: ", interm_forw_vec, batch_size * WIDTH, -1);
+        printVector("interm_forw_ref: ", interm_forw_ref, batch_size * WIDTH, -1);
     }
     CHECK(areVectorsWithinTolerance(interm_forw_vec, interm_forw_ref, 1.0e-2));
 
@@ -468,8 +470,8 @@ void test_dl_dinput(sycl::queue &q, const int input_width, const int output_widt
     auto dL_dinput_ref_stacked = mlp_cpp::stack_vector(dL_dinput_ref, batch_size);
 
     if (!areVectorsWithinTolerance(dL_dinput_vec, dL_dinput_ref_stacked, 1.0e-2)) {
-        // printVector("dL_dinput_ref_stacked: ", dL_dinput_ref_stacked);
-        // printVector("dL_dinput_vec: ", dL_dinput_vec);
+        printVector("dL_dinput_ref_stacked: ", dL_dinput_ref_stacked);
+        printVector("dL_dinput_vec: ", dL_dinput_vec);
     }
     CHECK(areVectorsWithinTolerance(dL_dinput_vec, dL_dinput_ref_stacked, 1.0e-2));
 }
@@ -528,16 +530,16 @@ void test_loss(sycl::queue &q, const int input_width, const int output_width, co
     std::vector<double> stacked_dL_doutput_ref = mlp_cpp::stack_vector(dL_doutput_ref, batch_size);
 
     if (!areVectorsWithinTolerance(dL_doutput_vec, stacked_dL_doutput_ref, 1.0e-2)) {
-        // printVector("stacked_dL_doutput_ref", stacked_dL_doutput_ref);
-        // printVector("dL_doutput_vec", dL_doutput_vec);
+        printVector("stacked_dL_doutput_ref", stacked_dL_doutput_ref);
+        printVector("dL_doutput_vec", dL_doutput_vec);
     }
     CHECK(areVectorsWithinTolerance(dL_doutput_vec, stacked_dL_doutput_ref, 1.0e-2));
     std::vector<double> stacked_loss_ref = mlp_cpp::stack_vector(loss_ref, batch_size);
     auto loss_vec = loss.copy_to_host();
 
     if (!areVectorsWithinTolerance(loss_vec, stacked_loss_ref, 1.0e-2)) {
-        // printVector("stacked_loss_ref", stacked_loss_ref);
-        // printVector("loss_vec", loss_vec);
+        printVector("stacked_loss_ref", stacked_loss_ref);
+        printVector("loss_vec", loss_vec);
     }
     CHECK(areVectorsWithinTolerance(loss_vec, stacked_loss_ref, 1.0e-2));
 }
@@ -596,8 +598,8 @@ void test_interm_fwd(sycl::queue &q, const int input_width, const int output_wid
     auto interm_forw_ref = mlp_cpp::repeat_inner_vectors<double>(fwd_result_ref, batch_size);
     auto interm_forw_vec = interm_forw.copy_to_host();
     if (!areVectorsWithinTolerance(interm_forw_vec, interm_forw_ref, 1.0e-2)) {
-        // printVector("interm_forw_vec", interm_forw_vec, WIDTH * batch_size);
-        // printVector("interm_forw_ref", interm_forw_ref, WIDTH * batch_size);
+        printVector("interm_forw_vec", interm_forw_vec, WIDTH * batch_size);
+        printVector("interm_forw_ref", interm_forw_ref, WIDTH * batch_size);
     }
 
     CHECK(interm_forw_vec.size() == interm_forw_ref.size());
@@ -1058,59 +1060,11 @@ TEST_CASE("Swiftnet - test loss") {
         }
     }
 }
-TEST_CASE("Swiftnet - test dL_dinput") {
-    sycl::queue q(sycl::gpu_selector_v);
-    const int n_hidden_layers = 2;
-
-    auto test_function = [=](sycl::queue &q, const int width, const int batch_size, std::string activation,
-                             std::string output_activation, std::string weight_init_mode) {
-        typedef sycl::ext::oneapi::bfloat16 T;
-        if (width == 16)
-            test_dl_dinput<T, 16>(q, 16, 16, n_hidden_layers, batch_size, activation, output_activation,
-                                  weight_init_mode);
-        else if (width == 32)
-            test_dl_dinput<T, 32>(q, 32, 32, n_hidden_layers, batch_size, activation, output_activation,
-                                  weight_init_mode);
-        else if (width == 64)
-            test_dl_dinput<T, 64>(q, 64, 64, n_hidden_layers, batch_size, activation, output_activation,
-                                  weight_init_mode);
-        else if (width == 128)
-            test_dl_dinput<T, 128>(q, 128, 128, n_hidden_layers, batch_size, activation, output_activation,
-                                   weight_init_mode);
-        else
-            throw std::invalid_argument("Unsupported width");
-    };
-    const int widths[] = {16, 32, 64, 128};
-    const int batch_sizes[] = {8, 16, 32, 64};
-    std::string activations[] = {"linear", "sigmoid", "relu"};
-    std::string output_activations[] = {"linear", "sigmoid", "relu"};
-    std::string weight_init_modes[] = {"constant", "random"};
-
-    for (int batch_size : batch_sizes) {
-        for (int width : widths) {
-            for (std::string activation : activations) {
-                for (std::string output_activation : output_activations) {
-                    for (std::string weight_init_mode : weight_init_modes) {
-                        std::string testName =
-                            "Testing interm bwd WIDTH " + std::to_string(width) + " - activation: " + activation +
-                            " - output_activation: " + output_activation + " - weight_init_mode: " + weight_init_mode +
-                            " - Batch size: " + std::to_string(batch_size);
-                        SUBCASE(testName.c_str()) {
-                            CHECK_NOTHROW(
-                                test_function(q, width, batch_size, activation, output_activation, weight_init_mode));
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 TEST_CASE("Swiftnet - test interm bwd") {
     sycl::queue q(sycl::gpu_selector_v);
     const int n_hidden_layers = 2;
 
-    test_interm_backw<sycl::ext::oneapi::bfloat16, 16>(q, 16, 16, n_hidden_layers, 8, "relu", "none", "random");
     auto test_function = [=](sycl::queue &q, const int width, const int batch_size, std::string activation,
                              std::string output_activation, std::string weight_init_mode) {
         typedef sycl::ext::oneapi::bfloat16 T;
@@ -1155,6 +1109,52 @@ TEST_CASE("Swiftnet - test interm bwd") {
     }
 }
 
+TEST_CASE("Swiftnet - test dL_dinput") {
+    sycl::queue q(sycl::gpu_selector_v);
+    const int n_hidden_layers = 2;
+    auto test_function = [=](sycl::queue &q, const int width, const int batch_size, std::string activation,
+                             std::string output_activation, std::string weight_init_mode) {
+        typedef sycl::ext::oneapi::bfloat16 T;
+        if (width == 16)
+            test_dl_dinput<T, 16>(q, 16, 16, n_hidden_layers, batch_size, activation, output_activation,
+                                  weight_init_mode);
+        else if (width == 32)
+            test_dl_dinput<T, 32>(q, 32, 32, n_hidden_layers, batch_size, activation, output_activation,
+                                  weight_init_mode);
+        else if (width == 64)
+            test_dl_dinput<T, 64>(q, 64, 64, n_hidden_layers, batch_size, activation, output_activation,
+                                  weight_init_mode);
+        else if (width == 128)
+            test_dl_dinput<T, 128>(q, 128, 128, n_hidden_layers, batch_size, activation, output_activation,
+                                   weight_init_mode);
+        else
+            throw std::invalid_argument("Unsupported width");
+    };
+    const int widths[] = {16, 32, 64, 128};
+    const int batch_sizes[] = {8, 16, 32, 64};
+    std::string activations[] = {"linear", "sigmoid", "relu"};
+    std::string output_activations[] = {"linear", "sigmoid", "relu"};
+    std::string weight_init_modes[] = {"constant", "random"};
+
+    for (int batch_size : batch_sizes) {
+        for (int width : widths) {
+            for (std::string activation : activations) {
+                for (std::string output_activation : output_activations) {
+                    for (std::string weight_init_mode : weight_init_modes) {
+                        std::string testName =
+                            "Testing interm bwd WIDTH " + std::to_string(width) + " - activation: " + activation +
+                            " - output_activation: " + output_activation + " - weight_init_mode: " + weight_init_mode +
+                            " - Batch size: " + std::to_string(batch_size);
+                        SUBCASE(testName.c_str()) {
+                            CHECK_NOTHROW(
+                                test_function(q, width, batch_size, activation, output_activation, weight_init_mode));
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 TEST_CASE("Swiftnet - test interm bwd padded") {
     sycl::queue q(sycl::gpu_selector_v);
     const int n_hidden_layers = 2;
@@ -1249,56 +1249,55 @@ TEST_CASE("Swiftnet - test grad unpadded") {
     }
 }
 
-// TEST_CASE("Swiftnet - test grad output padded") {
-//     sycl::queue q(sycl::gpu_selector_v);
-//     const int n_hidden_layers = 2;
-//     const int output_dim = 8;
-//     int batch_size = 8;
+TEST_CASE("Swiftnet - test grad output padded") {
+    sycl::queue q(sycl::gpu_selector_v);
+    const int n_hidden_layers = 2;
+    const int output_dim = 8;
+    int batch_size = 8;
 
-//     auto test_function = [=](sycl::queue &q, const int width, const int batch_size, std::string activation,
-//                              std::string output_activation, std::string weight_init_mode) {
-//         typedef sycl::ext::oneapi::bfloat16 T;
-//         if (width == 16)
-//             test_grads<T, 16>(q, 16, output_dim, n_hidden_layers, batch_size, activation, output_activation,
-//                               weight_init_mode);
-//         else if (width == 32)
-//             test_grads<T, 32>(q, 32, output_dim, n_hidden_layers, batch_size, activation, output_activation,
-//                               weight_init_mode);
-//         else if (width == 64)
-//             test_grads<T, 64>(q, 64, output_dim, n_hidden_layers, batch_size, activation, output_activation,
-//                               weight_init_mode);
-//         else if (width == 128)
-//             test_grads<T, 128>(q, 128, output_dim, n_hidden_layers, batch_size, activation, output_activation,
-//                                weight_init_mode);
-//         else
-//             throw std::invalid_argument("Unsupported width");
-//     };
-//     const int widths[] = {16, 32, 64, 128};
-//     const int batch_sizes[] = {8, 16, 32, 64, 1 << 17};
-//     std::string activations[] = {"linear", "sigmoid", "relu"};
-//     std::string output_activations[] = {"linear", "sigmoid"};
-//     std::string weight_init_modes[] = {"random"};
+    auto test_function = [=](sycl::queue &q, const int width, const int batch_size, std::string activation,
+                             std::string output_activation, std::string weight_init_mode) {
+        typedef sycl::ext::oneapi::bfloat16 T;
+        if (width == 16)
+            test_grads<T, 16>(q, 16, output_dim, n_hidden_layers, batch_size, activation, output_activation,
+                              weight_init_mode);
+        else if (width == 32)
+            test_grads<T, 32>(q, 32, output_dim, n_hidden_layers, batch_size, activation, output_activation,
+                              weight_init_mode);
+        else if (width == 64)
+            test_grads<T, 64>(q, 64, output_dim, n_hidden_layers, batch_size, activation, output_activation,
+                              weight_init_mode);
+        else if (width == 128)
+            test_grads<T, 128>(q, 128, output_dim, n_hidden_layers, batch_size, activation, output_activation,
+                               weight_init_mode);
+        else
+            throw std::invalid_argument("Unsupported width");
+    };
+    const int widths[] = {16, 32, 64, 128};
+    const int batch_sizes[] = {8, 16, 32, 64, 1 << 17};
+    std::string activations[] = {"linear", "sigmoid", "relu"};
+    std::string output_activations[] = {"linear", "sigmoid"};
+    std::string weight_init_modes[] = {"random"};
 
-//     for (int batch_size : batch_sizes) {
-//         for (int width : widths) {
-//             for (std::string activation : activations) {
-//                 for (std::string output_activation : output_activations) {
-//                     for (std::string weight_init_mode : weight_init_modes) {
-//                         std::string testName =
-//                             "Testing grad WIDTH " + std::to_string(width) + " - activation: " + activation +
-//                             " - output_activation: " + output_activation + " - weight_init_mode: " + weight_init_mode
-//                             + " - Batch size: " + std::to_string(batch_size);
-//                         SUBCASE(testName.c_str()) {
-//                             CHECK_NOTHROW(
-//                                 test_function(q, width, batch_size, activation, output_activation,
-//                                 weight_init_mode));
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-//     }
-// }
+    for (int batch_size : batch_sizes) {
+        for (int width : widths) {
+            for (std::string activation : activations) {
+                for (std::string output_activation : output_activations) {
+                    for (std::string weight_init_mode : weight_init_modes) {
+                        std::string testName =
+                            "Testing grad WIDTH " + std::to_string(width) + " - activation: " + activation +
+                            " - output_activation: " + output_activation + " - weight_init_mode: " + weight_init_mode +
+                            " - Batch size: " + std::to_string(batch_size);
+                        SUBCASE(testName.c_str()) {
+                            CHECK_NOTHROW(
+                                test_function(q, width, batch_size, activation, output_activation, weight_init_mode));
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 TEST_CASE("Swiftnet - test grad input padded") {
     sycl::queue q(sycl::gpu_selector_v);
@@ -1350,58 +1349,59 @@ TEST_CASE("Swiftnet - test grad input padded") {
     }
 }
 
-TEST_CASE("Swiftnet - test trainer") {
-    sycl::queue q(sycl::gpu_selector_v);
-    const int n_hidden_layers = 2;
+// TEST_CASE("Swiftnet - test trainer") {
+//     sycl::queue q(sycl::gpu_selector_v);
+//     const int n_hidden_layers = 2;
 
-    auto test_function = [=]<typename T>(sycl::queue &q, const int width, const int batch_size, std::string activation,
-                                         std::string output_activation, std::string weight_init_mode) {
-        if (width == 16)
-            test_trainer<T, 16>(q, 16, 16, n_hidden_layers, batch_size, activation, output_activation,
-                                weight_init_mode);
-        else if (width == 32)
-            test_trainer<T, 32>(q, 32, 32, n_hidden_layers, batch_size, activation, output_activation,
-                                weight_init_mode);
-        else if (width == 64)
-            test_trainer<T, 64>(q, 64, 64, n_hidden_layers, batch_size, activation, output_activation,
-                                weight_init_mode);
-        else if (width == 128)
-            test_trainer<T, 128>(q, 128, 128, n_hidden_layers, batch_size, activation, output_activation,
-                                 weight_init_mode);
-        else
-            throw std::invalid_argument("Unsupported width");
-    };
-    const int widths[] = {16, 32, 64, 128};
-    const int batch_sizes[] = {8, 16, 32, 64, 1 << 17};
-    std::string activations[] = {"linear", "sigmoid", "relu"};
-    std::string output_activations[] = {"linear", "sigmoid", "relu"};
-    std::string weight_init_modes[] = {"constant", "random"};
+//     auto test_function = [=]<typename T>(sycl::queue &q, const int width, const int batch_size, std::string
+//     activation,
+//                                          std::string output_activation, std::string weight_init_mode) {
+//         if (width == 16)
+//             test_trainer<T, 16>(q, 16, 16, n_hidden_layers, batch_size, activation, output_activation,
+//                                 weight_init_mode);
+//         else if (width == 32)
+//             test_trainer<T, 32>(q, 32, 32, n_hidden_layers, batch_size, activation, output_activation,
+//                                 weight_init_mode);
+//         else if (width == 64)
+//             test_trainer<T, 64>(q, 64, 64, n_hidden_layers, batch_size, activation, output_activation,
+//                                 weight_init_mode);
+//         else if (width == 128)
+//             test_trainer<T, 128>(q, 128, 128, n_hidden_layers, batch_size, activation, output_activation,
+//                                  weight_init_mode);
+//         else
+//             throw std::invalid_argument("Unsupported width");
+//     };
+//     const int widths[] = {16, 32, 64, 128};
+//     const int batch_sizes[] = {8, 16, 32, 64, 1 << 17};
+//     std::string activations[] = {"linear", "sigmoid", "relu"};
+//     std::string output_activations[] = {"linear", "sigmoid", "relu"};
+//     std::string weight_init_modes[] = {"constant", "random"};
 
-    for (int batch_size : batch_sizes) {
-        for (int width : widths) {
-            for (std::string activation : activations) {
-                for (std::string output_activation : output_activations) {
-                    for (std::string weight_init_mode : weight_init_modes) {
-                        std::string testName_bf16 =
-                            "Testing bf16 WIDTH " + std::to_string(width) + " - activation: " + activation +
-                            " - output_activation: " + output_activation + " - weight_init_mode: " + weight_init_mode +
-                            " - Batch size: " + std::to_string(batch_size);
-                        SUBCASE(testName_bf16.c_str()) {
-                            CHECK_NOTHROW(test_function.template operator()<sycl::ext::oneapi::bfloat16>(
-                                q, width, batch_size, activation, output_activation, weight_init_mode));
-                        }
+//     for (int batch_size : batch_sizes) {
+//         for (int width : widths) {
+//             for (std::string activation : activations) {
+//                 for (std::string output_activation : output_activations) {
+//                     for (std::string weight_init_mode : weight_init_modes) {
+//                         std::string testName_bf16 =
+//                             "Testing bf16 WIDTH " + std::to_string(width) + " - activation: " + activation +
+//                             " - output_activation: " + output_activation + " - weight_init_mode: " + weight_init_mode
+//                             + " - Batch size: " + std::to_string(batch_size);
+//                         SUBCASE(testName_bf16.c_str()) {
+//                             CHECK_NOTHROW(test_function.template operator()<sycl::ext::oneapi::bfloat16>(
+//                                 q, width, batch_size, activation, output_activation, weight_init_mode));
+//                         }
 
-                        std::string testName_half =
-                            "Testing half WIDTH " + std::to_string(width) + " - activation: " + activation +
-                            " - output_activation: " + output_activation + " - weight_init_mode: " + weight_init_mode +
-                            " - Batch size: " + std::to_string(batch_size);
-                        SUBCASE(testName_half.c_str()) {
-                            CHECK_NOTHROW(test_function.template operator()<sycl::half>(
-                                q, width, batch_size, activation, output_activation, weight_init_mode));
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
+//                         std::string testName_half =
+//                             "Testing half WIDTH " + std::to_string(width) + " - activation: " + activation +
+//                             " - output_activation: " + output_activation + " - weight_init_mode: " + weight_init_mode
+//                             + " - Batch size: " + std::to_string(batch_size);
+//                         SUBCASE(testName_half.c_str()) {
+//                             CHECK_NOTHROW(test_function.template operator()<sycl::half>(
+//                                 q, width, batch_size, activation, output_activation, weight_init_mode));
+//                         }
+//                     }
+//                 }
+//             }
+//         }
+//     }
+// }

@@ -503,7 +503,7 @@ template <typename T, int WIDTH> class NetworkModule : public Module {
         this->sycl_queue_.wait();
 
         if (pack_gradient) {
-            net_gradients_.Packed(net_gradients_);
+            net_gradients_.PackAndTranspose(net_gradients_);
         }
 
         torch::Tensor input_grad;
@@ -731,7 +731,7 @@ template <typename T_enc, typename T_net, int WIDTH> class NetworkWithEncodingMo
         this->sycl_queue_.wait();
 
         if (pack_gradient) {
-            net_gradients_->Packed(*net_gradients_.get());
+            net_gradients_->PackAndTranspose(*net_gradients_.get());
         }
         return {torch::Tensor(),
                 xpu::dpcpp::fromUSM((net_gradients_->GetViews().GetMatrixPointer(0)), torch_type<T_net>::dtype,
@@ -778,7 +778,7 @@ template <typename T_enc, typename T_net, int WIDTH> class NetworkWithEncodingMo
         this->sycl_queue_.wait();
 
         if (pack_gradient) {
-            net_gradients_->Packed(*net_gradients_.get());
+            net_gradients_->PackAndTranspose(*net_gradients_.get());
         }
 
         CopyToDeviceMem(net_gradients_->GetViews(), enc_gradients_->GetView(), *all_gradients_.get(),
