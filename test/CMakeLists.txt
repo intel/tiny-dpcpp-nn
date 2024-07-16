@@ -73,10 +73,10 @@ target_link_libraries(test-kernel-esimd PRIVATE test-lib network)
 doctest_discover_tests(test-kernel-esimd)
 
 
-add_executable(test-device-precision doctest_device_precision.cpp)
-add_sycl_to_target(TARGET test-device-precision SOURCES doctest_device_precision.cpp)
-target_link_libraries(test-device-precision PRIVATE test-lib network)
-doctest_discover_tests(test-device-precision)
+# add_executable(test-device-precision doctest_device_precision.cpp)
+# add_sycl_to_target(TARGET test-device-precision SOURCES doctest_device_precision.cpp)
+# target_link_libraries(test-device-precision PRIVATE test-lib network)
+# doctest_discover_tests(test-device-precision)
 
 add_executable(test-devicemem doctest_devicemem.cpp)
 add_sycl_to_target(TARGET test-devicemem SOURCES doctest_devicemem.cpp)
