@@ -21,7 +21,7 @@
 #include <vector>
 
 // Uncomment the following line to enable printing
-// #define ENABLE_PRINTING
+#define ENABLE_PRINTING
 template <typename T> double GetInfNorm(const std::vector<T> &v) {
     double norm = 0.0;
     for (auto val : v) {

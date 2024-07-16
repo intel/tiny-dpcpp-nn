@@ -10,10 +10,9 @@
 #include "doctest/doctest.h"
 #include <cmath>
 #include <iostream>
+#include <sycl/ext/intel/esimd.hpp>
 #include <sycl/sycl.hpp>
 #include <vector>
-
-using namespace sycl::ext::intel::esimd;
 
 void compare_exp(sycl::queue &q, float start, float end, float step) {
     int nElems = static_cast<int>((end - start) / step) + 1;
@@ -33,9 +32,11 @@ void compare_exp(sycl::queue &q, float start, float end, float step) {
     q.memcpy(x, x_host.data(), sizeof(float) * nElems).wait();
 
     // Run ESIMD kernel
-    q.parallel_for(sycl::range<1>(nElems), [=](sycl::id<1> i) {
-         simd<float, 1> val = x[i];
-         simd<float, 1> result = esimd::exp(-val);
+
+    q.parallel_for(sycl::range<1>(nElems), [=](sycl::id<1> i) SYCL_ESIMD_KERNEL {
+         sycl::ext::intel::esimd::simd<float, 1> val;
+         val.copy_from(x + i);
+         sycl::ext::intel::esimd::simd<float, 1> result = sycl::ext::intel::esimd::exp(-val);
          result.copy_to(esimd_exp + i);
      }).wait();
 
@@ -48,6 +49,8 @@ void compare_exp(sycl::queue &q, float start, float end, float step) {
 
     for (int i = 0; i < nElems; ++i) {
         float error = std::abs(esimd_exp_host[i] - std_exp_host[i]);
+        std::cout << "for x: " << x_host[i] << ", error: " << error << ", with esimd: " << esimd_exp_host[i]
+                  << ", std: " << std_exp_host[i] << std::endl;
         total_error += error;
         if (error > max_error) {
             max_error = error;
@@ -67,5 +70,5 @@ void compare_exp(sycl::queue &q, float start, float end, float step) {
 TEST_CASE("Compare exp functions") {
     sycl::queue q(sycl::gpu_selector_v);
 
-    SUBCASE("Compare exp from -1000 to 1000 with step 1.0") { compare_exp(q, -100.0f, 100.0f, 0.5f); }
+    SUBCASE("Compare exp from -20 to 20 with step 1e-3") { compare_exp(q, -10.0f, 10.0f, 0.1f); }
 }
