@@ -20,7 +20,6 @@
 
 #include "DeviceMatrix.h"
 #include "common.h"
-#include "gemm.h"
 #include "oneapi/mkl.hpp"
 
 namespace sycl::ext::intel::esimd::xmx {
@@ -226,32 +225,6 @@ class EsimdKernels {
             });
         });
 
-        // q.wait();
-        // float * new_forw = sycl::malloc_device<float>(intermediate_forward.nelements(), q);
-        // q.parallel_for(intermediate_forward.nelements(), [=](auto idx) { new_forw[idx] =
-        // static_cast<float>(intermediate_forward.GetMatrixPointer(0)[idx]); }).wait(); float * new_backw =
-        // sycl::malloc_device<float>(intermediate_backward.nelements(), q);
-        // q.parallel_for(intermediate_backward.nelements(), [=](auto idx) { new_backw[idx] =
-        // static_cast<float>(intermediate_backward.GetMatrixPointer(0)[idx]); }).wait(); float * new_out =
-        // sycl::malloc_device<float>(output.nelements(), q); q.parallel_for(output.nelements(), [=](auto idx) {
-        // new_out[idx] = static_cast<float>(output.GetMatrixPointer(0)[idx]); }).wait();
-
-        // std::vector<sycl::event> events(n_hidden_layers + 1);
-        // for (int iter = 0; iter < n_hidden_layers + 1; iter++) {
-        //         events[iter] = oneapi::mkl::blas::row_major::gemm(
-        //             q, oneapi::mkl::transpose::trans, oneapi::mkl::transpose::nontrans, WIDTH, WIDTH, M, 1.0,
-        //             new_backw + iter*M*WIDTH, WIDTH, new_forw + iter*M*WIDTH,
-        //             WIDTH, 0, new_out + size_t(iter)*WIDTH*WIDTH, WIDTH, {e});
-        //     }
-        // q.wait();
-        // sycl::free(new_forw, q);
-        // sycl::free(new_backw, q);
-        // q.parallel_for(output.nelements(), [=](auto idx) { output.GetMatrixPointer(0)[idx] =
-        // static_cast<T>(new_out[idx]); }).wait(); sycl::free(new_out, q);
-
-        // Gemm<T, WIDTH>::batched(M, n_hidden_layers + 1, intermediate_backward.GetMatrixPointer(0),
-        //                   intermediate_forward.GetMatrixPointer(0), output.GetMatrixPointer(0), q);
-
         // NOTE: MKL gemm_batch is slower.
         std::vector<sycl::event> events(n_hidden_layers + 1);
         if constexpr (std::is_same<T, sycl::ext::oneapi::bfloat16>::value) { // need to cast to onemkls bf16 type.
@@ -407,7 +380,7 @@ class EsimdKernels {
         static_assert(WIDTH >= 16); // TODO: generalize
         static_assert(WIDTH % (2 * TN) == 0);
         // As TN == 8, even vnni'ed we would only use half the cache line using a single block.
-        // Thus, we load 2 blocks at the same time.
+        // Thus, we load 2 blocks or more at the same time.
         Cs = static_cast<Tc>(0);
         if constexpr (WIDTH >= 4 * TN) {
             static_assert(WIDTH % (4 * TN) == 0);
