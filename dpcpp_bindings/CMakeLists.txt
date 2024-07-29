@@ -7,8 +7,8 @@ find_package(IntelSYCL REQUIRED)
 find_package(Torch REQUIRED PATHS ${TORCH_CMAKE_PREFIX_PATH})
 # Add include directories
 
-set(LIBTORCH_DIR "${PROJECT_SOURCE_DIR}/extern/libtorch/share/cmake/")
-list(APPEND CMAKE_PREFIX_PATH "${LIBTORCH_DIR}")
+# set(LIBTORCH_DIR "${PROJECT_SOURCE_DIR}/extern/libtorch/share/cmake/")
+# list(APPEND CMAKE_PREFIX_PATH "${LIBTORCH_DIR}")
 
 find_package(IPEX REQUIRED)
 
@@ -21,7 +21,7 @@ set(PYBIND_SOURCES
 
 # Create the Python module
 pybind11_add_module(tiny_dpcpp_nn_pybind_module ${PYBIND_SOURCES})
-find_library(TORCH_PYTHON_LIBRARY torch_python PATH "${TORCH_CMAKE_PREFIX_PATH}/../../lib")
+find_library(TORCH_PYTHON_LIBRARY torch_python PATHS "${TORCH_CMAKE_PREFIX_PATH}/../../lib" REQUIRED)
 
 # Link any required libraries
 target_link_libraries(tiny_dpcpp_nn_pybind_module PRIVATE network ${TORCH_LIBRARIES} ${TORCH_PYTHON_LIBRARY} ${TORCH_IPEX_LIBRARIES})

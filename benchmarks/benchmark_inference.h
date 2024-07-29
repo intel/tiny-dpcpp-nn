@@ -68,7 +68,7 @@ double benchmark_inference(const size_t batch_size, const int n_hidden_layers, c
         begin_time, end_time, batch_size, WIDTH, n_hidden_layers, n_iterations, sizeof(T));
 
     MPI_Barrier(MPI_COMM_WORLD);
-    isVectorWithinTolerance(output.copy_to_host(), input_val, 1.0e-2);
+    isVectorWithinTolerance(output.copy_to_host(), input_val, 1.0e-4);
     std::cout << std::endl;
 
     return gflops;

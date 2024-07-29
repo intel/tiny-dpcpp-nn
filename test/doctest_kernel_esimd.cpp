@@ -86,24 +86,32 @@ template <int M, int N, int TK, typename T> void TestLoadStoreRow(sycl::queue &q
     sycl::free(out, q);
 }
 
-template <int TM, int TK, int N, typename T> void TestReBlock(sycl::queue &q) {
+template <int TM, int TK, int TN, int N, typename T> void TestReBlock(sycl::queue &q) {
     constexpr int nElems = TM * N;
     T *out = sycl::malloc_device<T>(nElems, q);
     std::vector<T> out_host(nElems);
-    constexpr int TN = XMXTn::TN;
 
     q.parallel_for(sycl::nd_range<1>(1, 1), [=](sycl::nd_item<1> item) SYCL_ESIMD_KERNEL {
          simd<T, nElems> tmp(0, 1); // block-major with TMxTN blocks
          simd<T, nElems> dst(0);
-         EsimdKernels<T, N, N, N, Activation::ReLU, Activation::None>::template reBlock<TM, TK>(tmp, dst);
+         EsimdKernels<T, N, N, N, Activation::ReLU, Activation::None>::template reBlock<TM, TK, TN>(tmp, dst);
          dst.copy_to(out); // block-major with TMxTK blocks
      }).wait();
 
     q.memcpy(out_host.data(), out, sizeof(T) * nElems).wait();
+    for (int iter = 0; iter < TM; iter++) {
+        for (int coliter = 0; coliter < N; coliter++) {
+            std::cout << out_host[iter * N + coliter] << ", ";
+        }
+        std::cout << std::endl;
+    }
+    std::cout << std::endl << std::endl;
 
     if constexpr (TN == TK) {
         for (int iter = 0; iter < nElems; iter++) {
-            CHECK((int)out_host[iter] == static_cast<int>(iter));
+            bool tmp = (int)out_host[iter] == static_cast<int>(iter);
+            CHECK(tmp);
+            if (!tmp) return;
         }
     } else if constexpr (TK == TN / 2) { // TK == 8 and TN == 16
         constexpr int ratio = TN / TK;   // in how many matrices are we splitting
@@ -115,7 +123,9 @@ template <int TM, int TK, int N, typename T> void TestReBlock(sycl::queue &q) {
             const int val = block_old * (TM * TN) + new_sub_block * TK + new_row * TN + new_col;
 
             // std::cout << (int)out[iter] << ", " << iter << ", " << val << std::endl;
-            CHECK((int)out_host[iter] == static_cast<int>(val));
+            bool tmp = ((int)out_host[iter] == static_cast<int>(val));
+            CHECK(tmp);
+            if (!tmp) return;
         }
     } else if constexpr (TN < TK) {
         constexpr int ratio = TK / TN; // how many matrices are we merging.
@@ -128,7 +138,9 @@ template <int TM, int TK, int N, typename T> void TestReBlock(sycl::queue &q) {
 
             // std::cout << (int)out[iter] << ", " << iter << ", " << val << "; " << block_new << ", " << old_sub_block
             //           << ", " << old_row << ", " << old_col << std::endl;
-            CHECK((int)out_host[iter] == static_cast<int>(val));
+            bool tmp = ((int)out_host[iter] == static_cast<int>(val));
+            CHECK(tmp);
+            if (!tmp) return;
         }
 
     } else
@@ -168,16 +180,24 @@ TEST_CASE("LoadStoreRow") {
 TEST_CASE("reBlock") {
     sycl::queue q(sycl::gpu_selector_v);
 
-    SUBCASE("Equal dims 8") { TestReBlock<8, XMXTn::TN, 64, int16_t>(q); }
-    SUBCASE("Equal dims 4") { TestReBlock<4, XMXTn::TN, 64, int16_t>(q); }
-    SUBCASE("Equal dims 2") { TestReBlock<2, XMXTn::TN, 64, int16_t>(q); }
-    SUBCASE("Equal dims 1") { TestReBlock<1, XMXTn::TN, 64, int16_t>(q); }
-    SUBCASE("2x dims 8") { TestReBlock<8, XMXTn::TN * 2, 64, int16_t>(q); }
-    SUBCASE("2x dims 4") { TestReBlock<4, XMXTn::TN * 2, 64, int16_t>(q); }
-    SUBCASE("2x dims 2") { TestReBlock<2, XMXTn::TN * 2, 64, int16_t>(q); }
-    SUBCASE("2x dims 1") { TestReBlock<1, XMXTn::TN * 2, 64, int16_t>(q); }
-    SUBCASE("4x dims") { TestReBlock<8, XMXTn::TN * 4, 64, int16_t>(q); }
-    if constexpr (XMXTn::TN == 16) {
-        SUBCASE(".5x dims") { TestReBlock<8, XMXTn::TN / 2, 64, int16_t>(q); }
-    }
+    // SUBCASE("Equal dims 8") { TestReBlock<8, XMXTn::TN, XMXTn::TN, 64, int16_t>(q); }
+    // SUBCASE("Equal dims 4") { TestReBlock<4, XMXTn::TN, XMXTn::TN, 64, int16_t>(q); }
+    // SUBCASE("Equal dims 2") { TestReBlock<2, XMXTn::TN, XMXTn::TN, 64, int16_t>(q); }
+    // SUBCASE("Equal dims 1") { TestReBlock<1, XMXTn::TN, XMXTn::TN, 64, int16_t>(q); }
+    // SUBCASE("2x dims 8") { TestReBlock<8, XMXTn::TN * 2, XMXTn::TN, 64, int16_t>(q); }
+    // SUBCASE("2x dims 4") { TestReBlock<4, XMXTn::TN * 2, XMXTn::TN, 64, int16_t>(q); }
+    // SUBCASE("2x dims 2") { TestReBlock<2, XMXTn::TN * 2, XMXTn::TN, 64, int16_t>(q); }
+    // SUBCASE("2x dims 1") { TestReBlock<1, XMXTn::TN * 2, XMXTn::TN, 64, int16_t>(q); }
+    // SUBCASE("4x dims") { TestReBlock<8, XMXTn::TN * 4, XMXTn::TN, 64, int16_t>(q); }
+    // if constexpr (XMXTn::TN == 16) {
+    //     SUBCASE(".5x dims") { TestReBlock<8, XMXTn::TN / 2, XMXTn::TN, 64, int16_t>(q); }
+    // }
+    SUBCASE("8x8") { TestReBlock<8, 8, 8, 64, int16_t>(q); }
+    SUBCASE("16x8") { TestReBlock<8, 16, 8, 64, int16_t>(q); }
+    SUBCASE("32x8") { TestReBlock<8, 32, 8, 64, int16_t>(q); }
+    SUBCASE("64x8") { TestReBlock<8, 64, 8, 64, int16_t>(q); }
+    SUBCASE("8x16") { TestReBlock<8, 8, 16, 64, int16_t>(q); }
+    SUBCASE("16x16") { TestReBlock<8, 16, 16, 64, int16_t>(q); }
+    SUBCASE("32x16") { TestReBlock<8, 32, 16, 64, int16_t>(q); }
+    SUBCASE("64x16") { TestReBlock<8, 64, 16, 64, int16_t>(q); }
 }
