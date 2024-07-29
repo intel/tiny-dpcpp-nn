@@ -44,39 +44,32 @@ __ESIMD_NS::simd<T, N> dpas(__ESIMD_NS::simd_view<simd<CT, N_orig>, region1d_t<C
                          ANCasted>(C.data(), BCasted.data(), ACasted.data());
 }
 
+template <int SystolicDepth, int RepeatCount, typename T, typename BT, typename AT,
+          dpas_argument_type BPrecision = detail::dpas_precision_from_type<BT>(),
+          dpas_argument_type APrecision = detail::dpas_precision_from_type<AT>(), int BN, int AN, int AN_orig>
+auto dpas(__ESIMD_NS::simd<BT, BN> B, __ESIMD_NS::simd_view<simd<AT, AN_orig>, region1d_t<AT, AN, 1>> A) {
 
- template <
-     int SystolicDepth, int RepeatCount, typename T, typename BT, typename AT,
-     dpas_argument_type BPrecision = detail::dpas_precision_from_type<BT>(),
-     dpas_argument_type APrecision = detail::dpas_precision_from_type<AT>(),
-     int BN, int AN, int AN_orig>
- auto dpas(__ESIMD_NS::simd<BT, BN> B, __ESIMD_NS::simd_view<simd<AT, AN_orig>, region1d_t<AT, AN, 1>> A) {
-  
-   constexpr int ExecutionSize =
-       detail::verify_parameters_and_deduce_exec_size<SystolicDepth, RepeatCount,
-                                                      T, T, BT, AT, BPrecision,
-                                                      APrecision, BN, AN>();
-   // Result(_Mx_N) = A(_Mx_K) * B(_Kx_N)
-   // where:
-   //   _M = RepeatCount;
-   //   _K = SystolicDepth * OpsPerChannel;
-   //   _N = ExecutionSize (unknown, but deducible), must be 8 or 16.
-   constexpr int ResultN = RepeatCount * ExecutionSize;
-  
-   using MsgT = int;
-   constexpr int ANCasted = AN * sizeof(AT) / sizeof(MsgT);
-   constexpr int BNCasted = BN * sizeof(BT) / sizeof(MsgT);
-   __ESIMD_NS::simd<MsgT, ANCasted> ACasted = A.template bit_cast_view<MsgT>();
-   __ESIMD_NS::simd<MsgT, BNCasted> BCasted = B.template bit_cast_view<MsgT>();
-  
-   constexpr int Info = (RepeatCount << 24) + (SystolicDepth << 16) +
-                        ((int)APrecision << 8) + (int)BPrecision;
-   using RawT = typename __ESIMD_NS::simd<T, ResultN>::raw_element_type;
-   __ESIMD_NS::simd<T, ResultN> Result =
-       __esimd_dpas_nosrc0<Info, RawT, MsgT, MsgT, ResultN, BNCasted, ANCasted>(
-           BCasted.data(), ACasted.data());
-   return Result;
- }
+    constexpr int ExecutionSize = detail::verify_parameters_and_deduce_exec_size<SystolicDepth, RepeatCount, T, T, BT,
+                                                                                 AT, BPrecision, APrecision, BN, AN>();
+    // Result(_Mx_N) = A(_Mx_K) * B(_Kx_N)
+    // where:
+    //   _M = RepeatCount;
+    //   _K = SystolicDepth * OpsPerChannel;
+    //   _N = ExecutionSize (unknown, but deducible), must be 8 or 16.
+    constexpr int ResultN = RepeatCount * ExecutionSize;
+
+    using MsgT = int;
+    constexpr int ANCasted = AN * sizeof(AT) / sizeof(MsgT);
+    constexpr int BNCasted = BN * sizeof(BT) / sizeof(MsgT);
+    __ESIMD_NS::simd<MsgT, ANCasted> ACasted = A.template bit_cast_view<MsgT>();
+    __ESIMD_NS::simd<MsgT, BNCasted> BCasted = B.template bit_cast_view<MsgT>();
+
+    constexpr int Info = (RepeatCount << 24) + (SystolicDepth << 16) + ((int)APrecision << 8) + (int)BPrecision;
+    using RawT = typename __ESIMD_NS::simd<T, ResultN>::raw_element_type;
+    __ESIMD_NS::simd<T, ResultN> Result =
+        __esimd_dpas_nosrc0<Info, RawT, MsgT, MsgT, ResultN, BNCasted, ANCasted>(BCasted.data(), ACasted.data());
+    return Result;
+}
 
 }; // namespace sycl::ext::intel::esimd::xmx
 
@@ -106,7 +99,7 @@ template <> struct XMXCType<bf16> {
 template <> struct XMXCType<sycl::half> {
 #if TARGET_DEVICE == 0
     typedef float CType;
-    //typedef sycl::half CType;
+    // typedef sycl::half CType;
 #elif TARGET_DEVICE == 1
     typedef float CType;
 #endif
@@ -183,6 +176,7 @@ class EsimdKernels {
         assert(M % TM == 0);
         const int ITEMS_IN_WG = ComputeItemsInWG(M, TM);
         constexpr int TK = ComputeTK();
+        static_assert(WIDTH % TK == 0);
 
         auto e = q.submit([&](sycl::handler &cgh) {
             cgh.depends_on(deps);
@@ -191,13 +185,15 @@ class EsimdKernels {
                 const size_t loc_row_offset = item.get_global_linear_id() * TM;
 
                 simd<T, TM * WIDTH> As;
-                loadRow<TM, TK, cache_hint::uncached, cache_hint::uncached>(input.GetPointer(loc_row_offset, 0), As);
+                loadRow<TM, TK, cache_hint::uncached, cache_hint::uncached>(input.GetPointer(loc_row_offset, 0),
+                                                                            As); // block-major with TMxTK blocks
 
                 // store backward activated input to the last intermediate output
                 if constexpr (output_activation == Activation::None) {
+                    // do nothing
                 } else {
                     // Compute derivative of activation function
-                    applyBackwardActivation<output_activation, TM, TK, TM * WIDTH>(
+                    applyBackwardActivation<output_activation, TM, TK, TK>(
                         intermediate_forward.GetElementPointer(n_hidden_layers + 1, loc_row_offset, 0), As, As);
                     // n_hidden_layers +1 because the first (0 index) matrix in intermediate_forward (view of
                     // DeviceMatrices object) is input
@@ -212,7 +208,7 @@ class EsimdKernels {
                 for (int layer = n_hidden_layers; layer > 0; layer--) {
                     MAD<TM, TK>(As, weights.GetMatrixPointer(layer), Cs);
 
-                    applyBackwardActivation<activation, TM, TK>(
+                    applyBackwardActivation<activation, TM, TK, TN>(
                         intermediate_forward.GetElementPointer(layer, loc_row_offset, 0), Cs, As);
 
                     storeRow<TM, TK, cache_hint::uncached, cache_hint::uncached>(
@@ -221,7 +217,7 @@ class EsimdKernels {
                 if (dL_dinput.has_value()) {
                     MAD<TM, TK>(As, weights.GetMatrixPointer(0), Cs);
 
-                    applyBackwardActivation<Activation::None, TM, TK>(
+                    applyBackwardActivation<Activation::None, TM, TK, TN>(
                         intermediate_forward.GetElementPointer(0, loc_row_offset, 0), Cs, As);
 
                     storeRow<TM, TK, cache_hint::uncached, cache_hint::uncached>(
@@ -232,11 +228,13 @@ class EsimdKernels {
 
         // q.wait();
         // float * new_forw = sycl::malloc_device<float>(intermediate_forward.nelements(), q);
-        // q.parallel_for(intermediate_forward.nelements(), [=](auto idx) { new_forw[idx] = static_cast<float>(intermediate_forward.GetMatrixPointer(0)[idx]); }).wait();
-        // float * new_backw = sycl::malloc_device<float>(intermediate_backward.nelements(), q);
-        // q.parallel_for(intermediate_backward.nelements(), [=](auto idx) { new_backw[idx] = static_cast<float>(intermediate_backward.GetMatrixPointer(0)[idx]); }).wait();
-        // float * new_out = sycl::malloc_device<float>(output.nelements(), q);
-        // q.parallel_for(output.nelements(), [=](auto idx) { new_out[idx] = static_cast<float>(output.GetMatrixPointer(0)[idx]); }).wait();
+        // q.parallel_for(intermediate_forward.nelements(), [=](auto idx) { new_forw[idx] =
+        // static_cast<float>(intermediate_forward.GetMatrixPointer(0)[idx]); }).wait(); float * new_backw =
+        // sycl::malloc_device<float>(intermediate_backward.nelements(), q);
+        // q.parallel_for(intermediate_backward.nelements(), [=](auto idx) { new_backw[idx] =
+        // static_cast<float>(intermediate_backward.GetMatrixPointer(0)[idx]); }).wait(); float * new_out =
+        // sycl::malloc_device<float>(output.nelements(), q); q.parallel_for(output.nelements(), [=](auto idx) {
+        // new_out[idx] = static_cast<float>(output.GetMatrixPointer(0)[idx]); }).wait();
 
         // std::vector<sycl::event> events(n_hidden_layers + 1);
         // for (int iter = 0; iter < n_hidden_layers + 1; iter++) {
@@ -248,8 +246,8 @@ class EsimdKernels {
         // q.wait();
         // sycl::free(new_forw, q);
         // sycl::free(new_backw, q);
-        // q.parallel_for(output.nelements(), [=](auto idx) { output.GetMatrixPointer(0)[idx] = static_cast<T>(new_out[idx]); }).wait();
-        // sycl::free(new_out, q);
+        // q.parallel_for(output.nelements(), [=](auto idx) { output.GetMatrixPointer(0)[idx] =
+        // static_cast<T>(new_out[idx]); }).wait(); sycl::free(new_out, q);
 
         // Gemm<T, WIDTH>::batched(M, n_hidden_layers + 1, intermediate_backward.GetMatrixPointer(0),
         //                   intermediate_forward.GetMatrixPointer(0), output.GetMatrixPointer(0), q);
@@ -367,36 +365,38 @@ class EsimdKernels {
         constexpr int vnni_factor = std::max<int>(1, 4 / sizeof(T));
 
 #if TARGET_DEVICE == 0
-        std::array<config_2d_mem_access<float, TN, TK / vnni_factor, 1>, WIDTH/TN> configs;
-        for (int iterB = 0; iterB < WIDTH/TN; iterB++) {
+        std::array<config_2d_mem_access<float, TN, TK / vnni_factor, 1>, WIDTH / TN> configs;
+        for (int iterB = 0; iterB < WIDTH / TN; iterB++) {
             configs[iterB] = config_2d_mem_access<float, TN, TK / vnni_factor, 1>(
-                reinterpret_cast<float const *>(B), vnni_factor * WIDTH * sizeof(T) - 1,
-                WIDTH / vnni_factor - 1, vnni_factor * WIDTH * sizeof(T) - 1, iterB*TN, 0);
+                reinterpret_cast<float const *>(B), vnni_factor * WIDTH * sizeof(T) - 1, WIDTH / vnni_factor - 1,
+                vnni_factor * WIDTH * sizeof(T) - 1, iterB * TN, 0);
         }
 
-        #pragma unroll
+#pragma unroll
         for (int iterB = 0; iterB < WIDTH; iterB += TN) {
             simd<T, TK * TN> BlockB;
             auto BlockB_float = BlockB.template bit_cast_view<float>();
-            BlockB_float =lsc_load_2d<float, TN, TK / vnni_factor, 1, false, false, cache_hint::cached, cache_hint::cached>(
-                    configs[iterB/TN]);
-            Cs.template select<TM * TN, 1>(iterB * TM) = xmx::dpas<8, TM, Tc>(BlockB, As.template select<TM * TK, 1>(0));
+            BlockB_float = my_2d_load<float, TK / vnni_factor, TN>(configs[iterB / TN]);
+            // lsc_load_2d<float, TN, TK / vnni_factor, 1, false, false, cache_hint::cached, cache_hint::cached>(
+            //     configs[iterB / TN]);
+            Cs.template select<TM * TN, 1>(iterB * TM) =
+                xmx::dpas<8, TM, Tc>(BlockB, As.template select<TM * TK, 1>(0));
         }
-
 
 #pragma unroll
         for (int iterA = TK; iterA < WIDTH; iterA += TK) {
-            for (int iterB = 0; iterB < WIDTH/TN; iterB++) {
-                configs[iterB].set_y(iterA/vnni_factor);
+            for (int iterB = 0; iterB < WIDTH / TN; iterB++) {
+                configs[iterB].set_y(iterA / vnni_factor);
             }
-            
-            #pragma unroll
+
+#pragma unroll
             for (int iterB = 0; iterB < WIDTH; iterB += TN) {
                 simd<T, TK * TN> BlockB;
-                //config.set_x(iterB);
+                // config.set_x(iterB);
                 auto BlockB_float = BlockB.template bit_cast_view<float>();
-                BlockB_float =lsc_load_2d<float, TN, TK / vnni_factor, 1, false, false, cache_hint::cached, cache_hint::cached>(
-                    configs[iterB/TN]);
+                BlockB_float = my_2d_load<float, TK / vnni_factor, TN>(configs[iterB / TN]);
+                // lsc_load_2d<float, TN, TK / vnni_factor, 1, false, false, cache_hint::cached, cache_hint::cached>(
+                //     configs[iterB / TN]);
 
                 Cs.template select<TM * TN, 1>(iterB * TM) = xmx::dpas<8, TM, Tc>(
                     Cs.template select<TM * TN, 1>(iterB * TM), BlockB, As.template select<TM * TK, 1>(iterA * TM));
@@ -481,61 +481,64 @@ class EsimdKernels {
         static_assert(TK == 8 || TK == 16 || TK == 32 || TK == 64);
 
         if constexpr (act == Activation::None) {
-            reBlock<TM, TK>(convert<Tdest, Tsrc>(Src), Dest);
+            reBlock<TM, TK, TN>(convert<Tdest, Tsrc>(Src), Dest);
         } else if constexpr (act == Activation::ReLU) {
-            reBlock<TM, TK>(max<Tdest>(convert<Tdest, Tsrc>(Src), simd<Tdest, N>(static_cast<Tdest>(0))), Dest);
+            reBlock<TM, TK, TN>(max<Tdest>(convert<Tdest, Tsrc>(Src), simd<Tdest, N>(static_cast<Tdest>(0))), Dest);
         } else if constexpr (act == Activation::Sigmoid) {
             // Convert bfloat16 vectors to float to perform arithmetic operations.
             simd<float, N> sigmoid_result_float = 1.0f / (1.0f + esimd::exp(-convert<float>(Src)));
-            reBlock<TM, TK>(convert<Tdest>(sigmoid_result_float), Dest);
+            reBlock<TM, TK, TN>(convert<Tdest>(sigmoid_result_float), Dest);
         }
     }
 
-    template <Activation act, int TM, int TK, int N, typename Tdec, typename Tsrc, typename Tdest>
+    template <Activation act, int TM, int COLS_OUT, int COLS_IN, int N, typename Tdec, typename Tsrc, typename Tdest>
     SYCL_ESIMD_FUNCTION static void applyBackwardActivation(Tdec const *const Dec, simd<Tsrc, N> &Src,
                                                             simd<Tdest, N> &Dest) {
         static_assert(TM >= 1 && TM <= 8);
-        static_assert(TN == 16 || TN == 8);
-        static_assert(TK == 8 || TK == 16 || TK == 32 || TK == 64);
+        static_assert(COLS_OUT == 8 || COLS_OUT == 16 || COLS_OUT == 32 || COLS_OUT == 64);
+        static_assert(COLS_IN == 8 || COLS_IN == 16 || COLS_IN == 32 || COLS_IN == 64);
         static_assert(N == TM * WIDTH);
+        static_assert(WIDTH % COLS_OUT == 0);
+        static_assert(WIDTH % COLS_IN == 0);
 
         if constexpr (act == Activation::None) {
-            reBlock<TM, TK>(convert<Tdest, Tsrc>(Src), Dest);
+            reBlock<TM, COLS_OUT, COLS_IN>(convert<Tdest, Tsrc>(Src), Dest);
         } else if constexpr (act == Activation::ReLU) {
             simd<Tdec, N> loc_dec;
-            loadRow<TM, TN, cache_hint::uncached, cache_hint::uncached>(Dec, loc_dec);
+            loadRow<TM, COLS_IN, cache_hint::uncached, cache_hint::uncached>(Dec, loc_dec);
             simd_mask<N> m = loc_dec <= simd<Tdec, N>(0);
             Src.merge(simd<Tsrc, N>(0), m); // ATTENTION: this changes Src.
-            reBlock<TM, TK>(convert<Tdest, Tsrc>(Src), Dest);
+            reBlock<TM, COLS_OUT, COLS_IN>(convert<Tdest, Tsrc>(Src), Dest);
         } else if constexpr (act == Activation::Sigmoid) {
             // The derivative of the sigmoid is sigmoid(x) * (1 - sigmoid(x))
             simd<Tdec, N> loc_dec;
-            loadRow<TM, TN, cache_hint::uncached, cache_hint::uncached>(Dec, loc_dec);
+            loadRow<TM, COLS_IN, cache_hint::uncached, cache_hint::uncached>(Dec, loc_dec);
             simd<float, N> sigmoid_result = 1.0f / (1.0f + esimd::exp(-convert<float>(loc_dec)));
             simd<float, N> sigmoid_derivative = sigmoid_result * (1.0f - sigmoid_result);
             simd<float, N> Src_with_derivative = convert<float>(Src) * sigmoid_derivative;
-            reBlock<TM, TK>(convert<Tdest>(Src_with_derivative), Dest);
+            reBlock<TM, COLS_OUT, COLS_IN>(convert<Tdest>(Src_with_derivative), Dest);
         }
     }
 
     // TK == 8, 16, 32, 64; TN == 8 (DG2), 16 (PVC)
-    // Src contains of blocks sized TM*TN
+    // Src contains of blocks sized TM*locTN
     // Dest of blocks sized TM*TK
-    template <int TM, int TK, int N> SYCL_ESIMD_FUNCTION static void reBlock(simd<T, N> Src, simd<T, N> &Dest) {
-        static_assert(TK == TN || TK == 2 * TN || TK == 4 * TN || TK == 8 * TN || TK == TN / 2);
+    template <int TM, int TK, int locTN, int N>
+    SYCL_ESIMD_FUNCTION static void reBlock(simd<T, N> Src, simd<T, N> &Dest) {
+        static_assert(TK == locTN || TK == 2 * locTN || TK == 4 * locTN || TK == 8 * locTN || TK == locTN / 2);
 
-        if constexpr (TK == TN) {
+        if constexpr (TK == locTN) {
             Dest = Src;
-        } else if constexpr (TK == 2 * TN || TK == 4 * TN || TK == 8 * TN) {
-            constexpr int FAC = TK / TN;
+        } else if constexpr (TK == 2 * locTN || TK == 4 * locTN || TK == 8 * locTN) {
+            constexpr int FAC = TK / locTN;
             auto Dest_2d = Dest.template bit_cast_view<T, N / TK, TK>(); // block major 2d layout
-            for (int iter = 0; iter < WIDTH / TN; iter++) {              // iterate over the blocks in SRC
-                Dest_2d.template select<TM, 1, TN, 1>((iter / FAC) * TM, (iter % FAC) * TN) =
-                    Src.template select<TM * TN, 1>(iter * TM * TN);
+            for (int iter = 0; iter < WIDTH / locTN; iter++) {           // iterate over the blocks in SRC
+                Dest_2d.template select<TM, 1, locTN, 1>((iter / FAC) * TM, (iter % FAC) * locTN) =
+                    Src.template select<TM * locTN, 1>(iter * TM * locTN);
             }
-        } else if constexpr (TK == TN / 2) {
-            auto Src_2d = Src.template bit_cast_view<T, N / TN, TN>(); // block major 2d layout
-            for (int iter = 0; iter < WIDTH / TK; iter++) {            // iterate over the blocks in SRC
+        } else if constexpr (TK == locTN / 2) {
+            auto Src_2d = Src.template bit_cast_view<T, N / locTN, locTN>(); // block major 2d layout
+            for (int iter = 0; iter < WIDTH / TK; iter++) {                  // iterate over the blocks in SRC
                 Dest.template select<TM * TK, 1>(iter * TM * TK) =
                     Src_2d.template select<TM, 1, TK, 1>((iter / 2) * TM, (iter % 2) * TK);
             }
@@ -572,6 +575,25 @@ class EsimdKernels {
         if (items_in_wg <= 0) throw std::logic_error("Number of SGS per WG cannot be less than 1");
 
         return items_in_wg;
+    }
+
+    template <typename LoadT, int NROWS, int NCOLS>
+    static simd<LoadT, NROWS * NCOLS> my_2d_load(config_2d_mem_access<LoadT, NCOLS, NROWS, 1> &acc) {
+#if TARGET_DEVICE == 0
+        return lsc_load_2d<LoadT, NCOLS, NROWS, 1, false, false, cache_hint::cached, cache_hint::cached>(acc);
+#elif TARGET_DEVICE == 1
+        simd<LoadT, NROWS * NCOLS> ret;
+#pragma unroll
+        for (int rowiter = 0; rowiter < NROWS; rowiter++) {
+            ret.template select<NCOLS, 1>(rowiter * NCOLS) =
+                lsc_block_load<LoadT, NCOLS, lsc_data_size::default_size, cache_hint::cached, cache_hint::cached>(
+                    reinterpret_cast<LoadT const *const>(
+                        reinterpret_cast<uint8_t const *const>(acc.get_data_pointer() + acc.get_x()) +
+                        ((rowiter + acc.get_y()) * (acc.get_surface_pitch() + 1))));
+        }
+
+        return ret;
+#endif
     }
 
     template <bool INFERENCE>
@@ -647,7 +669,6 @@ class EsimdKernels {
         return {e};
     }
 };
-
 
 extern template class EsimdKernels<bf16, 16, 16, 16, Activation::None, Activation::None>;
 extern template class EsimdKernels<bf16, 16, 16, 16, Activation::None, Activation::ReLU>;
