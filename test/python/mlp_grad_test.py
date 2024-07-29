@@ -1,8 +1,6 @@
 import numpy as np
 import torch
 import pytest
-from src.mlp import MLP
-from src.utils import get_reshaped_params, is_close
 
 if torch.cuda.is_available():
     import tinycudann as tcnn
@@ -122,6 +120,8 @@ def run_config(config, weight_val, input_val):
             params_grad=to_numpy(network.params.grad),
         )
     elif device == "xpu":
+        from src.mlp import MLP
+        from src.utils import get_reshaped_params, is_close
         reshaped_params = get_reshaped_params(
             params,
             config["n_neurons"],

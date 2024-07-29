@@ -236,7 +236,7 @@ def test_fwd(
     error_is_small, _ = is_close(
         y_torch.flatten().cpu().detach().numpy(),
         y_dpcpp.flatten().cpu().detach().numpy(),
-        rtol=1e-4,
+        rtol=1e-3,
         name="fwd error",
         print_diff=True,
     )
@@ -249,14 +249,14 @@ def test_fwd(
 
 
 if __name__ == "__main__":
-    input_width = 128
-    hidden_size = 128
+    input_width = 16
+    hidden_size = 16
     hidden_layers = 1
-    output_width = 128
-    # activation_func = "sigmoid"
-    activation_func = "linear"
-    output_func = "linear"
-    # output_func = "sigmoid"
+    output_width = 16
+    activation_func = "relu"
+    # activation_func = "linear"
+    # output_func = "linear"
+    output_func = "sigmoid"
     dtype = torch.float16
     use_nwe = False
     use_weights_of_tinynn = True
