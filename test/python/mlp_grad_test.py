@@ -10,6 +10,9 @@ else:
     import tiny_dpcpp_nn as tcnn
 
     device = "xpu"
+
+    from src.mlp import MLP
+    from src.utils import get_reshaped_params, is_close
 torch.set_printoptions(precision=10)
 np.set_printoptions(precision=10)
 
@@ -120,8 +123,6 @@ def run_config(config, weight_val, input_val):
             params_grad=to_numpy(network.params.grad),
         )
     elif device == "xpu":
-        from src.mlp import MLP
-        from src.utils import get_reshaped_params, is_close
         reshaped_params = get_reshaped_params(
             params,
             config["n_neurons"],
@@ -230,16 +231,16 @@ def test_mlp_gradient(
 if __name__ == "__main__":
     # pytest.main()
 
-    # activation_funcs = ["none"]
-    # hidden_layer_counts = [1]
-    # hidden_sizes = [16]
-    # input_vals = [10 ** (-1)]
-    # params_vals = [10 ** (-1)]
-    activation_funcs = ["relu", "none", "sigmoid"]
-    hidden_layer_counts = [1, 2, 4]
-    hidden_sizes = [16, 32, 64, 128]
-    input_vals = [10**exponent for exponent in range(-5, 5)] + ["random"]
-    params_vals = [10**exponent for exponent in range(-5, 5)] + ["random"]
+    activation_funcs = ["none"]
+    hidden_layer_counts = [1]
+    hidden_sizes = [16]
+    input_vals = [10 ** (-1)]
+    params_vals = [10 ** (-1)]
+    # activation_funcs = ["relu", "none", "sigmoid"]
+    # hidden_layer_counts = [1, 2, 4]
+    # hidden_sizes = [16, 32, 64, 128]
+    # input_vals = [10**exponent for exponent in range(-5, 5)] + ["random"]
+    # params_vals = [10**exponent for exponent in range(-5, 5)] + ["random"]
 
     for output_fn in activation_funcs:
         for activation_fn in activation_funcs:

@@ -249,14 +249,14 @@ def test_fwd(
 
 
 if __name__ == "__main__":
-    input_width = 16
+    input_width = 1
     hidden_size = 16
     hidden_layers = 1
-    output_width = 16
+    output_width = 1
     activation_func = "relu"
     # activation_func = "linear"
-    # output_func = "linear"
-    output_func = "sigmoid"
+    output_func = "linear"
+    # output_func = "sigmoid"
     dtype = torch.float16
     use_nwe = False
     use_weights_of_tinynn = True
