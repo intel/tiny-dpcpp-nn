@@ -56,6 +56,8 @@ void test_network_backward(sycl::queue &q, const int input_width, const int outp
         network_activation = Activation::ReLU;
     } else if (activation == "linear") {
         network_activation = Activation::None;
+    } else if (activation == "sigmoid") {
+        network_activation = Activation::Sigmoid;
     }
     std::cout << "Hi2" << std::endl;
 
