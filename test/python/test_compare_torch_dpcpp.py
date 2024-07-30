@@ -10,7 +10,7 @@ torch.set_printoptions(precision=10)
 np.set_printoptions(precision=10)
 
 input_sizes = [1, 2, 4, 8, 16]
-output_funcs = ["linear", "sigmoid"]
+output_funcs = ["linear"]
 output_sizes = [1, 2, 4, 8, 16]
 activation_funcs = ["relu", "linear", "sigmoid"]
 hidden_layer_counts = [1, 2, 4]
