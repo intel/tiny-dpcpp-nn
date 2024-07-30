@@ -83,22 +83,26 @@ bool isVectorWithinTolerance(const std::vector<Tval> &value, const Ttarget targe
 template <typename Tval, typename Ttarget>
 bool areVectorsWithinTolerance(const std::vector<Tval> &value, const std::vector<Ttarget> &target,
                                const double tolerance) {
-
+    std::cout << "Is same 1" << std::endl;
     bool is_same = true;
     double max_diff = 0.0;
     const double inf_diff = GetInfNorm(GetAbsDiff(value, target));
     const double inf_val = GetInfNorm(value);
     const double inf_tar = GetInfNorm(target);
+    std::cout << "Is same 2" << std::endl;
     if ((double)inf_tar == 0.0)
         max_diff = inf_diff;
     else
         max_diff = inf_diff / std::max(inf_tar, inf_val);
+    std::cout << "Is same 3" << std::endl;
 
     if (max_diff > tolerance) is_same = false;
+    std::cout << "Is same 4" << std::endl;
     if (!is_same) {
         std::cout << "Values are within tolerance = " << std::boolalpha << is_same << std::noboolalpha
                   << ". Max diff = " << max_diff << std::endl;
     }
+    std::cout << "Is same 5" << std::endl;
     return is_same;
 }
 
