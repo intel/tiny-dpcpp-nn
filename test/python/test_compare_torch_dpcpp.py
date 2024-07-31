@@ -254,7 +254,7 @@ if __name__ == "__main__":
     hidden_layers = 1
     output_width = 16
     # activation_func = "relu"
-    activation_func = "linear"
+    activation_func = "relu"
     # output_func = "linear"
     output_func = "sigmoid"
     dtype = torch.float16
