@@ -7,8 +7,8 @@ find_package(IntelSYCL REQUIRED)
 find_package(Torch REQUIRED PATHS ${TORCH_CMAKE_PREFIX_PATH})
 # Add include directories
 
-# set(LIBTORCH_DIR "${PROJECT_SOURCE_DIR}/extern/libtorch/share/cmake/")
-# list(APPEND CMAKE_PREFIX_PATH "${LIBTORCH_DIR}")
+set(LIBTORCH_DIR "${PROJECT_SOURCE_DIR}/extern/libtorch/share/cmake/")
+list(APPEND CMAKE_PREFIX_PATH "${LIBTORCH_DIR}")
 
 find_package(IPEX REQUIRED)
 
