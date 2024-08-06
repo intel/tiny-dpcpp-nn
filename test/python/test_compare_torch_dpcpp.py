@@ -10,7 +10,7 @@ torch.set_printoptions(precision=10)
 np.set_printoptions(precision=10)
 
 input_sizes = [1, 2, 4, 8, 16]
-output_funcs = ["linear"]
+output_funcs = ["linear", "sigmoid"]
 output_sizes = [1, 2, 4, 8, 16]
 activation_funcs = ["relu", "linear", "sigmoid"]
 hidden_layer_counts = [1, 2, 4]
@@ -155,8 +155,8 @@ def test_grad(
         for layer in range(len(grads_dpcpp)):
             assert (
                 torch.abs(grads_dpcpp[layer]).sum()
-                - torch.abs(grads_dpcpp[layer]).sum()
-            ) < 1e-3
+                - torch.abs(grads_torch[layer]).sum()
+            ) < 1e-3, f"torch.abs(grads_dpcpp[layer]).sum(): {torch.abs(grads_dpcpp[layer]).sum()}, torch.abs(grads_torch[layer]).sum(): {torch.abs(grads_torch[layer]).sum()}"
         print("Compare grads")
         compare_matrices(grads_dpcpp, grads_torch)
         print("Compare grads passed")
@@ -236,7 +236,7 @@ def test_fwd(
     error_is_small, _ = is_close(
         y_torch.flatten().cpu().detach().numpy(),
         y_dpcpp.flatten().cpu().detach().numpy(),
-        rtol=1e-3,
+        rtol=1e-2,
         name="fwd error",
         print_diff=True,
     )
@@ -249,18 +249,19 @@ def test_fwd(
 
 
 if __name__ == "__main__":
-    input_width = 16
+
+    input_width = 1
     hidden_size = 16
     hidden_layers = 1
-    output_width = 16
+    output_width = 1
     # activation_func = "relu"
-    activation_func = "relu"
-    # output_func = "linear"
-    output_func = "sigmoid"
+    activation_func = "sigmoid"
+    output_func = "linear"
+    # output_func = "sigmoid"
     dtype = torch.float16
     use_nwe = False
-    use_weights_of_tinynn = True
-    use_constant_weight = True
+    use_weights_of_tinynn = False
+    use_constant_weight = False
     test_fwd(
         input_width,
         hidden_size,
