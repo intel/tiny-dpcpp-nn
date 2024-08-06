@@ -235,15 +235,25 @@ def test_use_cases(width):
 
 if __name__ == "__main__":
     # Benchmark
-    # WIDTHS = [16, 32, 64, 128]
-    WIDTHS = [64]
+    WIDTHS = [16, 32, 64, 128]
     for WIDTH in WIDTHS:
         print(f"WIDTH: {WIDTH}")
         input_size = WIDTH
         hidden_sizes = [WIDTH] * 4
         output_size = WIDTH
         batch_sizes = [
+            2**10,
+            2**11,
+            2**12,
+            2**13,
+            2**14,
+            2**15,
+            2**16,
             2**17,
+            2**18,
+            2**19,
+            2**20,
+            2**21,
         ]
         # Test benchmark
         start_training(
@@ -254,5 +264,5 @@ if __name__ == "__main__":
             f"../benchmarks/results/bench_result_pytorch_{DEVICE_NAME}_width{WIDTH}.json",
         )
 
-        # # Test Uses cases
-        # test_use_cases(WIDTH)
+        # Test Uses cases
+        test_use_cases(WIDTH)

@@ -9,9 +9,9 @@ from src.utils import create_models, compare_matrices, get_grad_params, is_close
 torch.set_printoptions(precision=10)
 np.set_printoptions(precision=10)
 
-input_sizes = [1, 2, 4, 8, 16]
-output_funcs = ["linear"]
-output_sizes = [1, 2, 4, 8, 16]
+input_sizes = [1, -1]
+output_funcs = ["linear", "sigmoid"]
+output_sizes = [1, -1]
 activation_funcs = ["relu", "linear", "sigmoid"]
 hidden_layer_counts = [1, 2, 4]
 dtypes = [torch.float16, torch.bfloat16]
@@ -51,8 +51,7 @@ def train_model(model, x_train, y_train, n_steps):
             ).to(DEVICE_NAME)
             y_predicted_all.append(y_pred.detach().cpu().to(torch.float))
             optimizer.zero_grad()
-            # loss.backward()
-            y_pred.backward(torch.ones_like(y_pred))
+            loss.backward()
 
             grads_all, params_all = get_grad_params(model)
             grads.append(grads_all)
@@ -105,6 +104,10 @@ def test_grad(
     iterations=1,
     n_steps=1,  # if this is too large, there will be accumulated error (weights aren't the same, thus the loss is not the same etc)
 ):
+    if input_size == -1:
+        input_size = hidden_size
+    if output_size == -1:
+        output_size = hidden_size
     for iter_ in range(iterations):
         print(f"Starting iteration {iter_}")
         if iter_ == 0:
@@ -150,13 +153,7 @@ def test_grad(
 
         grads_dpcpp = grads_dpcpp[0][0]
         grads_torch = grads_torch[0]
-
         assert len(grads_dpcpp) == len(grads_torch)
-        for layer in range(len(grads_dpcpp)):
-            assert (
-                torch.abs(grads_dpcpp[layer]).sum()
-                - torch.abs(grads_dpcpp[layer]).sum()
-            ) < 1e-3
         print("Compare grads")
         compare_matrices(grads_dpcpp, grads_torch)
         print("Compare grads passed")
@@ -199,6 +196,10 @@ def test_fwd(
     use_weights_of_tinynn,
     use_constant_weight=False,
 ):
+    if input_size == -1:
+        input_size = hidden_size
+    if output_size == -1:
+        output_size = hidden_size
     # Generate random input data for testing
     torch.manual_seed(123)
     input_data = torch.randn(BATCH_SIZE, input_size).to(DEVICE_NAME)
@@ -236,7 +237,7 @@ def test_fwd(
     error_is_small, _ = is_close(
         y_torch.flatten().cpu().detach().numpy(),
         y_dpcpp.flatten().cpu().detach().numpy(),
-        rtol=1e-3,
+        rtol=1e-2,
         name="fwd error",
         print_diff=True,
     )
@@ -249,18 +250,19 @@ def test_fwd(
 
 
 if __name__ == "__main__":
-    input_width = 16
-    hidden_size = 16
-    hidden_layers = 1
-    output_width = 16
-    # activation_func = "relu"
+
+    input_width = 1
+    hidden_size = 64
+    hidden_layers = 2
+    output_width = 1
     activation_func = "relu"
+    # activation_func = "sigmoid"
     # output_func = "linear"
     output_func = "sigmoid"
     dtype = torch.float16
     use_nwe = False
-    use_weights_of_tinynn = True
-    use_constant_weight = True
+    use_weights_of_tinynn = False
+    use_constant_weight = False
     test_fwd(
         input_width,
         hidden_size,

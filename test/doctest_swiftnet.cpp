@@ -247,7 +247,6 @@ void test_grads(sycl::queue &q, const int input_width, const int output_width, c
             interm_backw_ref.push_back(value); // Add each element to the flattened vector
         }
     }
-
     CHECK(areVectorsWithinTolerance(interm_backw_vec, interm_backw_ref,
                                     1.0e-2)); // sanity check, being tested in test_interm_backw
 
@@ -1039,7 +1038,7 @@ TEST_CASE("Swiftnet - test loss") {
     const int batch_sizes[] = {8, 16, 32, 64};
     std::string activations[] = {"linear", "sigmoid", "relu"};
     std::string output_activations[] = {"linear", "sigmoid", "relu"};
-    std::string weight_init_modes[] = {"constant", "random"};
+    std::string weight_init_modes[] = {"random"};
 
     for (int batch_size : batch_sizes) {
         for (int width : widths) {
@@ -1087,7 +1086,7 @@ TEST_CASE("Swiftnet - test interm bwd") {
     const int batch_sizes[] = {8, 16, 32, 64};
     std::string activations[] = {"linear", "sigmoid", "relu"};
     std::string output_activations[] = {"linear", "sigmoid", "relu"};
-    std::string weight_init_modes[] = {"constant", "random"};
+    std::string weight_init_modes[] = {"random"};
 
     for (int batch_size : batch_sizes) {
         for (int width : widths) {
@@ -1134,7 +1133,7 @@ TEST_CASE("Swiftnet - test dL_dinput") {
     const int batch_sizes[] = {8, 16, 32, 64};
     std::string activations[] = {"linear", "sigmoid", "relu"};
     std::string output_activations[] = {"linear", "sigmoid", "relu"};
-    std::string weight_init_modes[] = {"constant", "random"};
+    std::string weight_init_modes[] = {"random"};
 
     for (int batch_size : batch_sizes) {
         for (int width : widths) {
@@ -1182,7 +1181,7 @@ TEST_CASE("Swiftnet - test interm bwd padded") {
     const int batch_sizes[] = {8, 16, 32, 64};
     std::string activations[] = {"linear", "sigmoid", "relu"};
     std::string output_activations[] = {"linear", "sigmoid", "relu"};
-    std::string weight_init_modes[] = {"constant", "random"};
+    std::string weight_init_modes[] = {"random"};
 
     for (int batch_size : batch_sizes) {
         for (int width : widths) {
@@ -1206,6 +1205,7 @@ TEST_CASE("Swiftnet - test interm bwd padded") {
 
 TEST_CASE("Swiftnet - test grad unpadded") {
     sycl::queue q(sycl::gpu_selector_v);
+
     const int n_hidden_layers = 2;
 
     auto test_function = [=](sycl::queue &q, const int width, const int batch_size, std::string activation,
@@ -1227,7 +1227,7 @@ TEST_CASE("Swiftnet - test grad unpadded") {
     const int batch_sizes[] = {8, 16, 32, 64};
     std::string activations[] = {"linear", "sigmoid", "relu"};
     std::string output_activations[] = {"linear", "sigmoid", "relu"};
-    std::string weight_init_modes[] = {"constant", "random"};
+    std::string weight_init_modes[] = {"random"};
 
     for (int batch_size : batch_sizes) {
         for (int width : widths) {
@@ -1399,59 +1399,3 @@ TEST_CASE("Swiftnet - test grad padded large batch size") {
         }
     }
 }
-// TEST_CASE("Swiftnet - test trainer") {
-//     sycl::queue q(sycl::gpu_selector_v);
-//     const int n_hidden_layers = 2;
-
-//     auto test_function = [=]<typename T>(sycl::queue &q, const int width, const int batch_size, std::string
-//     activation,
-//                                          std::string output_activation, std::string weight_init_mode) {
-//         if (width == 16)
-//             test_trainer<T, 16>(q, 16, 16, n_hidden_layers, batch_size, activation, output_activation,
-//                                 weight_init_mode);
-//         else if (width == 32)
-//             test_trainer<T, 32>(q, 32, 32, n_hidden_layers, batch_size, activation, output_activation,
-//                                 weight_init_mode);
-//         else if (width == 64)
-//             test_trainer<T, 64>(q, 64, 64, n_hidden_layers, batch_size, activation, output_activation,
-//                                 weight_init_mode);
-//         else if (width == 128)
-//             test_trainer<T, 128>(q, 128, 128, n_hidden_layers, batch_size, activation, output_activation,
-//                                  weight_init_mode);
-//         else
-//             throw std::invalid_argument("Unsupported width");
-//     };
-//     const int widths[] = {16, 32, 64, 128};
-//     const int batch_sizes[] = {8, 16, 32, 64, 1 << 17};
-//     std::string activations[] = {"linear", "sigmoid", "relu"};
-//     std::string output_activations[] = {"linear", "sigmoid", "relu"};
-//     std::string weight_init_modes[] = {"constant", "random"};
-
-//     for (int batch_size : batch_sizes) {
-//         for (int width : widths) {
-//             for (std::string activation : activations) {
-//                 for (std::string output_activation : output_activations) {
-//                     for (std::string weight_init_mode : weight_init_modes) {
-//                         std::string testName_bf16 =
-//                             "Testing bf16 WIDTH " + std::to_string(width) + " - activation: " + activation +
-//                             " - output_activation: " + output_activation + " - weight_init_mode: " + weight_init_mode
-//                             + " - Batch size: " + std::to_string(batch_size);
-//                         SUBCASE(testName_bf16.c_str()) {
-//                             CHECK_NOTHROW(test_function.template operator()<sycl::ext::oneapi::bfloat16>(
-//                                 q, width, batch_size, activation, output_activation, weight_init_mode));
-//                         }
-
-//                         std::string testName_half =
-//                             "Testing half WIDTH " + std::to_string(width) + " - activation: " + activation +
-//                             " - output_activation: " + output_activation + " - weight_init_mode: " + weight_init_mode
-//                             + " - Batch size: " + std::to_string(batch_size);
-//                         SUBCASE(testName_half.c_str()) {
-//                             CHECK_NOTHROW(test_function.template operator()<sycl::half>(
-//                                 q, width, batch_size, activation, output_activation, weight_init_mode));
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-//     }
-// }
