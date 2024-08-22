@@ -400,8 +400,9 @@ template <typename T> class EncodingModule : public Module {
 template <typename T, int WIDTH> class NetworkModule : public Module {
   public:
     NetworkModule(const int input_width, const int output_width, const int n_hidden_layers, const Activation activation,
-                  const Activation output_activation)
-        : network_(this->sycl_queue_, input_width, output_width, n_hidden_layers, activation, output_activation),
+                  const Activation output_activation, bool use_bias)
+        : network_(this->sycl_queue_, input_width, output_width, n_hidden_layers, activation, output_activation,
+                   Network<T>::WeightInitMode::xavier_normal, use_bias),
           net_gradients_(network_.get_n_hidden_layers() + 1, network_.get_network_width(), WIDTH, WIDTH, WIDTH, WIDTH,
                          network_.get_output_width(), this->sycl_queue_),
           max_batch_size_(0), interm_forw_ptr_(nullptr), interm_backw_ptr_(nullptr), dL_dinput_ptr_(nullptr) {

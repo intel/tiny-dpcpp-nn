@@ -51,8 +51,8 @@ def test_set_params(input_size, output_size, dtype):
     network.set_params(param_vals)
 
     # Using torch.isclose to compare param_vals with network.params and network.params.data
-    is_close_params = torch.isclose(param_vals, network.params)
-    is_close_params_data = torch.isclose(param_vals, network.params.data)
+    is_close_params = torch.isclose(param_vals, network.params.to(dtype))
+    is_close_params_data = torch.isclose(param_vals, network.params.data.to(dtype))
 
     assert (
         is_close_params.all()
@@ -70,6 +70,6 @@ def test_set_params(input_size, output_size, dtype):
 
 if __name__ == "__main__":
     dtype = torch.float16
-    input_size = 1
-    output_size = 1
+    input_size = 16
+    output_size = 16
     test_set_params(input_size, output_size, dtype)

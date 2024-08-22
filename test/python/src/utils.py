@@ -238,6 +238,7 @@ def create_models(
             store_params_as_full_precision=store_params_as_full_precision,
             input_dtype=input_dtype,
             backend_param_dtype=backend_param_dtype,
+            use_bias=False,  # for comparison, we don't use the one padding
         )
 
     if use_weights_of_tinynn:
