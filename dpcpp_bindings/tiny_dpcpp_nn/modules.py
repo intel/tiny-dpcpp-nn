@@ -14,6 +14,9 @@ MIN_BATCH_SIZE = 8  # in tiny-dpcpp-nn the smallest possible batch size is 8
 
 torch.set_printoptions(precision=2)
 
+def free_temporary_memory():
+    """Dummy function for compatibility"""
+    pass
 
 def unpad_tensor_to_input_dim(padded_tensor, output_dim):
     batch_size, current_width = padded_tensor.shape
