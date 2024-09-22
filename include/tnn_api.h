@@ -64,10 +64,12 @@ class Module {
     virtual void set_params(torch::Tensor &tensor, bool weights_are_packed) = 0;
     virtual torch::Tensor get_params() = 0;
     virtual torch::Tensor forward_pass(torch::Tensor input_tensor) = 0;
-    virtual std::tuple<torch::Tensor, torch::Tensor>
-    backward_pass(torch::Tensor input_tensor, torch::Tensor input_from_fwd, bool pack_gradient, bool get_dl_dinput) = 0;
-    virtual std::tuple<torch::Tensor, torch::Tensor> backward_pass(torch::Tensor input_tensor, bool pack_gradient,
+    virtual std::tuple<torch::Tensor, torch::Tensor> backward_pass(torch::Tensor input_tensor,
+                                                                   torch::Tensor input_from_fwd,
+                                                                   bool pack_transpose_gradient,
                                                                    bool get_dl_dinput) = 0;
+    virtual std::tuple<torch::Tensor, torch::Tensor>
+    backward_pass(torch::Tensor input_tensor, bool pack_transpose_gradient, bool get_dl_dinput) = 0;
     virtual torch::Tensor inference(torch::Tensor input_tensor) = 0;
     virtual size_t n_params() = 0;
     virtual size_t n_output_dims() = 0;
@@ -282,13 +284,14 @@ template <typename T> class EncodingModule : public Module {
 
     torch::Tensor inference(torch::Tensor input_tensor) override { return forward_pass(input_tensor); }
 
-    std::tuple<torch::Tensor, torch::Tensor> backward_pass(torch::Tensor grad_output, bool pack_gradient = false,
+    std::tuple<torch::Tensor, torch::Tensor> backward_pass(torch::Tensor grad_output,
+                                                           bool pack_transpose_gradient = false,
                                                            bool get_dl_dinput = false) override {
         throw std::runtime_error("backward_pass needs input_from_fwd");
     }
 
     std::tuple<torch::Tensor, torch::Tensor> backward_pass(torch::Tensor grad_output, torch::Tensor input_from_fwd,
-                                                           bool pack_gradient = false,
+                                                           bool pack_transpose_gradient = false,
                                                            bool get_dl_dinput = false) override {
         if (encoding_->n_params() == 0) {
             return {torch::Tensor(), torch::Tensor()};
@@ -296,7 +299,7 @@ template <typename T> class EncodingModule : public Module {
 
         CHECK_XPU(grad_output);
 
-        if (pack_gradient) {
+        if (pack_transpose_gradient) {
             throw std::invalid_argument("Encoding params are not packed");
         }
         if (get_dl_dinput) {
@@ -446,11 +449,11 @@ template <typename T, int WIDTH> class NetworkModule : public Module {
     }
 
     std::tuple<torch::Tensor, torch::Tensor> backward_pass(torch::Tensor grad_output, torch::Tensor input_from_fwd,
-                                                           bool pack_gradient, bool get_dl_dinput) override {
+                                                           bool pack_transpose_gradient, bool get_dl_dinput) override {
         throw std::runtime_error("backward_pass of NetworkModule takes no input_from_fwd");
     }
 
-    std::tuple<torch::Tensor, torch::Tensor> backward_pass(torch::Tensor grad_output, bool pack_gradient,
+    std::tuple<torch::Tensor, torch::Tensor> backward_pass(torch::Tensor grad_output, bool pack_transpose_gradient,
                                                            bool get_dl_dinput) override {
         CHECK_XPU(grad_output);
 
@@ -481,7 +484,8 @@ template <typename T, int WIDTH> class NetworkModule : public Module {
         network_.backward_pass(dL_doutput, net_gradients_.GetViews(), interm_bwd, interm_fwd, {}, dL_dinput);
         this->sycl_queue_.wait();
 
-        if (pack_gradient) {
+        if (pack_transpose_gradient) {
+            // Pack and transpose gradient as we multiply from left (Wx) instead of from the right as in pytorch
             net_gradients_.PackAndTranspose(net_gradients_);
         }
 
@@ -545,26 +549,6 @@ template <typename T, int WIDTH> class NetworkModule : public Module {
         max_batch_size_ = 0;
     }
 
-    void printDeviceMatrix(const DeviceMatricesView<T> &device_matrices_view, int line_break_every) {
-        // Calculate the total number of elements to copy from the device memory
-        size_t total_elements = device_matrices_view.nelements();
-
-        // Create a host vector to store the copied data
-        std::vector<T> host_vector(total_elements);
-
-        // Copy the data from the device to the host vector
-        this->sycl_queue_
-            .memcpy(host_vector.data(), device_matrices_view.GetMatrixPointer(0), total_elements * sizeof(T))
-            .wait();
-
-        // Print the contents of the vector
-        for (size_t i = 0; i < total_elements; ++i) {
-            std::cout << host_vector[i] << ", ";
-            // Add a newline for better readability, you can adjust the number based on expected dimensions for
-            // visualization
-            if ((i + 1) % line_break_every == 0) std::cout << "========================" << std::endl;
-        }
-    }
 
   private:
     SwiftNetMLP<T, WIDTH> network_;
@@ -679,7 +663,7 @@ template <typename T_enc, typename T_net, int WIDTH> class NetworkWithEncodingMo
             {static_cast<long>(batch_size), static_cast<long>(network_->get_network()->get_output_width())});
     }
 
-    std::tuple<torch::Tensor, torch::Tensor> backward_pass(torch::Tensor grad_output, bool pack_gradient,
+    std::tuple<torch::Tensor, torch::Tensor> backward_pass(torch::Tensor grad_output, bool pack_transpose_gradient,
                                                            bool get_dl_dinput) override {
         CHECK_XPU(grad_output);
         set_params();
@@ -709,7 +693,8 @@ template <typename T_enc, typename T_net, int WIDTH> class NetworkWithEncodingMo
         network_->backward_pass(dL_doutput, net_gradients_->GetViews(), interm_bwd, interm_fwd, {});
         this->sycl_queue_.wait();
 
-        if (pack_gradient) {
+        if (pack_transpose_gradient) {
+            // Pack and transpose gradient as we multiply from left (Wx) instead of from the right as in pytorch
             net_gradients_->PackAndTranspose(*net_gradients_.get());
         }
         return {torch::Tensor(),
@@ -718,7 +703,7 @@ template <typename T_enc, typename T_net, int WIDTH> class NetworkWithEncodingMo
     }
 
     std::tuple<torch::Tensor, torch::Tensor> backward_pass(torch::Tensor grad_output, torch::Tensor input_from_fwd,
-                                                           bool pack_gradient, bool get_dl_dinput) override {
+                                                           bool pack_transpose_gradient, bool get_dl_dinput) override {
         CHECK_XPU(grad_output);
         CHECK_XPU(input_from_fwd);
         set_params();
@@ -756,7 +741,8 @@ template <typename T_enc, typename T_net, int WIDTH> class NetworkWithEncodingMo
                                 interm_fwd, {}, input_encoding_dmv, &dL_dinput_view);
         this->sycl_queue_.wait();
 
-        if (pack_gradient) {
+        if (pack_transpose_gradient) {
+            // Pack and transpose gradient as we multiply from left (Wx) instead of from the right as in pytorch
             net_gradients_->PackAndTranspose(*net_gradients_.get());
         }
 

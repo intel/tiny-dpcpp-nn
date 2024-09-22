@@ -52,6 +52,9 @@ class PybindingModule {
     torch::Tensor initial_params(torch::Tensor &tensor) { return m_module->initialize_params(tensor); }
 
     void set_params(torch::Tensor &tensor, bool weights_are_packed) {
+        // Note that weights_are_packed describes whether the weights that are
+        // passed are already packed, i.e., true means the weights are in packed
+        // format and no more packing is necessary backend
         m_module->set_params(tensor, weights_are_packed);
     }
 

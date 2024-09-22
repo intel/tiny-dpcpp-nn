@@ -142,7 +142,7 @@ class _module_function(torch.autograd.Function):
         grad = None if grad is None else (grad / loss_scale)
         input_grad = None if input_grad is None else (input_grad / loss_scale)
 
-        # 4 inputs to forward, so need 4 grads
+        # 5 inputs to forward, so need 5 grads
         return (None, input_grad, grad, None, None)
 
 

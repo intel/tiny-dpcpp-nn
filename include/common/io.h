@@ -198,4 +198,24 @@ void saveImageToPGM(const std::string &filename, const int width, const int heig
     // Close the file
     outputFile.close();
 }
+
+template <typename T>
+void printDeviceMatrix(const DeviceMatricesView<T> &device_matrices_view, sycl::queue &q, int line_break_every) {
+    // Calculate the total number of elements to copy from the device memory
+    size_t total_elements = device_matrices_view.nelements();
+
+    // Create a host vector to store the copied data
+    std::vector<T> host_vector(total_elements);
+
+    // Copy the data from the device to the host vector
+    q.memcpy(host_vector.data(), device_matrices_view.GetMatrixPointer(0), total_elements * sizeof(T)).wait();
+
+    // Print the contents of the vector
+    for (size_t i = 0; i < total_elements; ++i) {
+        std::cout << host_vector[i] << ", ";
+        // Add a newline for better readability, you can adjust the number based on expected dimensions for
+        // visualization
+        if ((i + 1) % line_break_every == 0) std::cout << "========================" << std::endl;
+    }
+}
 } // namespace io

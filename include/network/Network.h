@@ -62,7 +62,7 @@ template <typename T> class Network : public NetworkBase<T> {
     enum WeightInitMode { arange, constant_pos, constant_negative, xavier_normal, none };
 
     Network(sycl::queue &q, const int n_hidden_layers, const int input_width, const int network_width,
-            const int output_width, const WeightInitMode mode, bool use_bias)
+            const int output_width, const WeightInitMode mode, const bool use_bias)
         : m_q(q), input_width_(PadWidths(input_width, network_width)),
           output_width_(PadWidths(output_width, network_width)), original_input_width_(input_width),
           original_output_width_(output_width), n_hidden_layers_(NonNegative(n_hidden_layers)),
@@ -83,7 +83,10 @@ template <typename T> class Network : public NetworkBase<T> {
     sycl::queue &get_queue() { return m_q; }
     const sycl::queue &get_queue() const { return m_q; }
 
-    virtual void set_weights_matrices(const std::vector<T> &weights, bool weights_are_packed) {
+    virtual void set_weights_matrices(const std::vector<T> &weights, const bool weights_are_packed) {
+        // Note that weights_are_packed describes whether the weights that are
+        // passed are already packed, i.e., true means the weights are in packed
+        // format and no more packing is necessary backend
         if (m_weights_matrices.nelements() != weights.size()) {
             std::string errorMessage =
                 "m_weights_matrices nelements: " + std::to_string(m_weights_matrices.nelements()) +
@@ -170,11 +173,11 @@ template <typename T> class Network : public NetworkBase<T> {
         const int padded_input_width = get_input_width();
         const int network_width = get_network_width();
         const int padded_output_width = get_output_width();
-        const int input_width_divisibly_by = 16;
+        constexpr int input_width_divisibly_by = 16;
 
         // to replicate the behaviour of bias (we only do W*x, not W*x+bias), the input has (unpadded_input_width +
         // one_padded_input_width + zero_padded_input_width) elements, where
-        // zero_padded_input_width = padded_input_width - (unpadded_input_width + one_padded_input_width)
+        // zero_padded_input_width = padded_input_width - (one_padded_input_width)
         // This is following tiny-cuda-nn's behaviour, where the unpadded_input_width is padded up to the next 16th
         // element with ones. We thus also pad the unpadded_input_width with ones to the next 16th element and fill the
         // rest with zeros. The input weight matrix in SwiftNet will be of dimension padded_input_width x network_width.
@@ -192,8 +195,7 @@ template <typename T> class Network : public NetworkBase<T> {
         }
 
         if (one_padded_input_width > padded_input_width)
-            throw std::invalid_argument(
-                "one_padded_input_width is larger than padded_input_width. Chose different input_width_divisibly_by");
+            throw std::invalid_argument("one_padded_input_width > padded_input_width, the input width is too small.");
 
         // input matrix: set rows to 0.
         if (one_padded_input_width != padded_input_width) {
@@ -271,11 +273,11 @@ template <typename T> class Network : public NetworkBase<T> {
             int fan_in_out = network_width_ + network_width_;
             if (mat_i == 0) {
                 // round up to multiple of 16 for compatibility
-                int pad16_width = ((original_input_width_ + 15) / 16) * 16;
+                int pad16_width = tinydpcppnn::math::next_multiple<int>(original_input_width_, 16);
                 fan_in_out = pad16_width + network_width_;
             } else if (mat_i + 1 == ms.GetNumberOfMatrices()) {
                 // round up to multiple of 16 for compatibility
-                int pad16_width = ((original_output_width_ + 15) / 16) * 16;
+                int pad16_width = tinydpcppnn::math::next_multiple<int>(original_input_width_, 16);
                 fan_in_out = pad16_width + network_width_;
             }
             double stddev = weight_val_scaling_factor * std::sqrt(6.0 / fan_in_out);

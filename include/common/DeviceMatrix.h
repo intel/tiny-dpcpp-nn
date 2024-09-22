@@ -95,56 +95,6 @@ template <typename T> class DeviceMatricesView {
         return input_m_ * input_n_ + output_m_ * output_n_ + (n_matrices_ - 2) * middle_m_ * middle_n_;
     }
 
-    void print(sycl::queue &q, int max_elements_per_matrix = 10) const {
-        for (uint32_t matrix = 0; matrix < n_matrices_; ++matrix) {
-            T *matrix_ptr = GetMatrixPointer(matrix);
-            size_t rows, cols;
-            if (matrix == 0) {
-                rows = input_m_;
-                cols = input_n_;
-            } else if (matrix == n_matrices_ - 1) {
-                rows = output_m_;
-                cols = output_n_;
-            } else {
-                rows = middle_m_;
-                cols = middle_n_;
-            }
-
-            std::vector<T> host_data(rows * cols);
-            q.memcpy(host_data.data(), matrix_ptr, rows * cols * sizeof(T)).wait();
-
-            size_t num_rows_to_print = std::min(rows, static_cast<size_t>(max_elements_per_matrix));
-            size_t num_cols_to_print = std::min(cols, static_cast<size_t>(max_elements_per_matrix));
-
-            std::cout << "Matrix " << matrix << " (" << rows << "x" << cols << "):" << std::endl;
-            for (size_t i = 0; i < num_rows_to_print; ++i) {
-                std::cout << "[ ";
-                for (size_t j = 0; j < num_cols_to_print; ++j) {
-                    std::cout << static_cast<double>(host_data[i * cols + j]);
-                    if (j < num_cols_to_print - 1) {
-                        std::cout << ", ";
-                    }
-                }
-                std::cout << " ]" << std::endl;
-            }
-
-            if (rows > max_elements_per_matrix) {
-                std::cout << "..." << std::endl;
-                for (size_t i = rows - num_rows_to_print; i < rows; ++i) {
-                    std::cout << "[ ";
-                    for (size_t j = 0; j < num_cols_to_print; ++j) {
-                        std::cout << static_cast<double>(host_data[i * cols + j]);
-                        if (j < num_cols_to_print - 1) {
-                            std::cout << ", ";
-                        }
-                    }
-                    std::cout << " ]" << std::endl;
-                }
-            }
-            std::cout << std::endl;
-        }
-    }
-
   private:
     const uint32_t n_matrices_;
     const size_t input_m_;
@@ -489,6 +439,11 @@ template <typename T> class DeviceMatrices {
         if (src.n() != dest.m() || src.m() != dest.n()) throw std::invalid_argument("Cannot transpose.");
         // TODO: check that the underlying data is actually in the same context.
 
+        // Ensure that src and dest are not the same matrix
+        if (src.GetPointer() == dest.GetPointer()) {
+            throw std::invalid_argument("Cannot transpose in place: src and dest are the same.");
+        }
+
         T *const new_p = dest.GetPointer();
         T const *const old_p = src.GetPointer();
         const size_t loc_cols = src.n();
@@ -559,6 +514,9 @@ template <typename T> class DeviceMatrices {
             int transposed_idx = j * loc_rows + i;
             transposed_p[toPackedLayoutCoord(idx, loc_rows, loc_cols)] = temp_src[transposed_idx];
         });
+
+        // Free the temporary source buffer
+        sycl::free(temp_src, q);
     }
 
     sycl::queue &m_q;
