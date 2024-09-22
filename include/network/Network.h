@@ -62,7 +62,7 @@ template <typename T> class Network : public NetworkBase<T> {
     enum WeightInitMode { arange, constant_pos, constant_negative, xavier_normal, none };
 
     Network(sycl::queue &q, const int n_hidden_layers, const int input_width, const int network_width,
-            const int output_width, const WeightInitMode mode)
+            const int output_width, const WeightInitMode mode, bool use_bias)
         : m_q(q), input_width_(PadWidths(input_width, network_width)),
           output_width_(PadWidths(output_width, network_width)), original_input_width_(input_width),
           original_output_width_(output_width), n_hidden_layers_(NonNegative(n_hidden_layers)),
@@ -70,7 +70,8 @@ template <typename T> class Network : public NetworkBase<T> {
           m_weights_matrices(get_n_hidden_layers() + 1, get_input_width(), get_network_width(), get_network_width(),
                              get_network_width(), get_network_width(), get_output_width(), m_q),
           m_weightsT_matrices(get_n_hidden_layers() + 1, get_network_width(), get_input_width(), get_network_width(),
-                              get_network_width(), get_output_width(), get_network_width(), m_q) {
+                              get_network_width(), get_output_width(), get_network_width(), m_q),
+          use_bias_(use_bias) {
 
         SanityCheck();
         initialize_weights_matrices(input_width, output_width, mode);
@@ -165,20 +166,46 @@ template <typename T> class Network : public NetworkBase<T> {
             throw std::invalid_argument("Padded weights width cannot be less than the unpadded.");
 
         /// we need to copy everything here since we do not want to have an implicit copy of 'this'
+
         const int padded_input_width = get_input_width();
         const int network_width = get_network_width();
         const int padded_output_width = get_output_width();
+        const int input_width_divisibly_by = 16;
+
+        // to replicate the behaviour of bias (we only do W*x, not W*x+bias), the input has (unpadded_input_width +
+        // one_padded_input_width + zero_padded_input_width) elements, where
+        // zero_padded_input_width = padded_input_width - (unpadded_input_width + one_padded_input_width)
+        // This is following tiny-cuda-nn's behaviour, where the unpadded_input_width is padded up to the next 16th
+        // element with ones. We thus also pad the unpadded_input_width with ones to the next 16th element and fill the
+        // rest with zeros. The input weight matrix in SwiftNet will be of dimension padded_input_width x network_width.
+        // However, only the frist one_padded_input_width rows have values, the rest will have zeros as the input vector
+        // will only have (unpadded_input_width) true elements, then (one_padded_input_width-unpadded_input_width) ones
+        // that serve as bias term. The rest will be zero.
+        int one_padded_input_width = 0;
+        if (!use_bias_) {
+            one_padded_input_width = unpadded_input_width; // we don't pad with ones at all, if not using bias
+        } else if (unpadded_input_width % input_width_divisibly_by == 0) {
+            one_padded_input_width = padded_input_width;
+        } else {
+            one_padded_input_width = (unpadded_input_width / input_width_divisibly_by + 1) *
+                                     input_width_divisibly_by; // round up to next input_width_divisibly_by
+        }
+
+        if (one_padded_input_width > padded_input_width)
+            throw std::invalid_argument(
+                "one_padded_input_width is larger than padded_input_width. Chose different input_width_divisibly_by");
 
         // input matrix: set rows to 0.
-        if (unpadded_input_width != padded_input_width) {
+        if (one_padded_input_width != padded_input_width) {
             DeviceMatrixView<T> weights = m_weights_matrices.Front();
             m_q.parallel_for(padded_input_width * network_width,
                              [=](auto idx) {
                                  const int i = idx / network_width; // rows
 
-                                 if (i >= unpadded_input_width)
+                                 if (i >= one_padded_input_width) {
                                      weights.GetPointer()[toPackedLayoutCoord(idx, padded_input_width, network_width)] =
                                          static_cast<T>(0.0f);
+                                 }
                              })
                 .wait();
         }
@@ -234,6 +261,7 @@ template <typename T> class Network : public NetworkBase<T> {
 
     // Initialize memory with constant values
     static void initialize_constant(DeviceMatrices<T> &ms, const T &constant) { ms.fill(constant); }
+
     void initialize_xavier_normal(DeviceMatrices<T> &ms, const double weight_val_scaling_factor = 1.0) {
         std::random_device rd;
         std::mt19937 gen(rd());
@@ -281,6 +309,8 @@ template <typename T> class Network : public NetworkBase<T> {
     const uint32_t original_input_width_;  // unpadded
     const int n_hidden_layers_;
     const int network_width_;
+
+    bool use_bias_;
 
     DeviceMatrices<T> m_weights_matrices;
     DeviceMatrices<T> m_weightsT_matrices;

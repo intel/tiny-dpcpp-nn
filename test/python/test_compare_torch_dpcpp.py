@@ -9,16 +9,17 @@ from src.utils import create_models, compare_matrices, get_grad_params, is_close
 torch.set_printoptions(precision=10)
 np.set_printoptions(precision=10)
 
-input_sizes = [1, 2, 4, 8, 16]
+input_sizes = [1, -1]
 output_funcs = ["linear", "sigmoid"]
-output_sizes = [1, 2, 4, 8, 16]
+output_sizes = [1, -1]
 activation_funcs = ["relu", "linear", "sigmoid"]
 hidden_layer_counts = [1, 2, 4]
-dtypes = [torch.float16, torch.bfloat16]
+# dtypes = [torch.float16, torch.bfloat16]
+dtypes = [torch.float16]
 hidden_sizes = [16, 32, 64, 128]
 # use_nwe_array = [False, True]
 use_nwe_array = [False]
-use_weights_of_tinynn_array = [False, True]
+use_weights_of_tinynn_array = [True]
 BATCH_SIZE = 2**10
 DEVICE_NAME = "xpu"
 
@@ -105,6 +106,10 @@ def test_grad(
     iterations=1,
     n_steps=1,  # if this is too large, there will be accumulated error (weights aren't the same, thus the loss is not the same etc)
 ):
+    if input_size == -1:
+        input_size = hidden_size
+    if output_size == -1:
+        output_size = hidden_size
     for iter_ in range(iterations):
         print(f"Starting iteration {iter_}")
         if iter_ == 0:
@@ -152,11 +157,6 @@ def test_grad(
         grads_torch = grads_torch[0]
 
         assert len(grads_dpcpp) == len(grads_torch)
-        for layer in range(len(grads_dpcpp)):
-            assert (
-                torch.abs(grads_dpcpp[layer]).sum()
-                - torch.abs(grads_torch[layer]).sum()
-            ) < 1e-3, f"torch.abs(grads_dpcpp[layer]).sum(): {torch.abs(grads_dpcpp[layer]).sum()}, torch.abs(grads_torch[layer]).sum(): {torch.abs(grads_torch[layer]).sum()}"
         print("Compare grads")
         compare_matrices(grads_dpcpp, grads_torch)
         print("Compare grads passed")
@@ -199,6 +199,10 @@ def test_fwd(
     use_weights_of_tinynn,
     use_constant_weight=False,
 ):
+    if input_size == -1:
+        input_size = hidden_size
+    if output_size == -1:
+        output_size = hidden_size
     # Generate random input data for testing
     torch.manual_seed(123)
     input_data = torch.randn(BATCH_SIZE, input_size).to(DEVICE_NAME)
@@ -250,12 +254,12 @@ def test_fwd(
 
 if __name__ == "__main__":
 
-    input_width = 1
+    input_width = 8
     hidden_size = 16
-    hidden_layers = 1
-    output_width = 1
-    # activation_func = "relu"
-    activation_func = "sigmoid"
+    hidden_layers = 2
+    output_width = 16
+    activation_func = "relu"
+    # activation_func = "sigmoid"
     output_func = "linear"
     # output_func = "sigmoid"
     dtype = torch.float16

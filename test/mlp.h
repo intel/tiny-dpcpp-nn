@@ -130,8 +130,8 @@ double sigmoid(double x) { return 1.0 / (1.0 + std::exp(-x)); }
 
 double dsigmoid(double x) {
     // Calculating the derivative of the sigmoid function using its output
-    double s = sigmoid(x);
-    return s * (1 - s);
+    // the input is already activated
+    return x * (1 - x);
 }
 // MLP class using 'Matrix' struct for matrix operations
 template <typename T> class MLP {

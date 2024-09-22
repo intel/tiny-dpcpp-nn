@@ -210,25 +210,6 @@ class Module {
         return tensor;
     }
 
-    template <typename T>
-    static void convertTensorToDeviceMatrix(torch::Tensor &tensor, DeviceMatrix<T> &device_matrix,
-                                            sycl::queue &sycl_queue_) {
-        CHECK_XPU(tensor);
-
-        // Ensure the tensor sizes match the DeviceMatrix dimensions
-        if (tensor.size(0) != static_cast<int64_t>(device_matrix.rows()) ||
-            tensor.size(1) != static_cast<int64_t>(device_matrix.cols())) {
-            std::ostringstream msg;
-            msg << "Tensor dimensions (" << tensor.size(0) << ", " << tensor.size(1) << ")"
-                << " do not match DeviceMatrix dimensions (" << device_matrix.rows() << ", " << device_matrix.cols()
-                << ")";
-            throw std::runtime_error(msg.str());
-        }
-
-        T *tensor_data_ptr = static_cast<T *>(xpu::dpcpp::toUSM(tensor));
-        device_matrix.copy_from_device(tensor_data_ptr);
-    }
-
   protected:
     sycl::queue &sycl_queue_;
     virtual void FreeWorkspace() = 0;
@@ -419,8 +400,9 @@ template <typename T> class EncodingModule : public Module {
 template <typename T, int WIDTH> class NetworkModule : public Module {
   public:
     NetworkModule(const int input_width, const int output_width, const int n_hidden_layers, const Activation activation,
-                  const Activation output_activation)
-        : network_(this->sycl_queue_, input_width, output_width, n_hidden_layers, activation, output_activation),
+                  const Activation output_activation, bool use_bias)
+        : network_(this->sycl_queue_, input_width, output_width, n_hidden_layers, activation, output_activation,
+                   Network<T>::WeightInitMode::xavier_normal, use_bias),
           net_gradients_(network_.get_n_hidden_layers() + 1, network_.get_network_width(), WIDTH, WIDTH, WIDTH, WIDTH,
                          network_.get_output_width(), this->sycl_queue_),
           max_batch_size_(0), interm_forw_ptr_(nullptr), interm_backw_ptr_(nullptr), dL_dinput_ptr_(nullptr) {
@@ -473,7 +455,6 @@ template <typename T, int WIDTH> class NetworkModule : public Module {
         CHECK_XPU(grad_output);
 
         const int batch_size = grad_output.sizes()[0];
-
         if (grad_output.size(1) != network_.get_output_width()) {
             throw std::invalid_argument("grad_output.size(1): " + std::to_string(grad_output.size(1)) +
                                         " is not equal to  get_padded_output_width" +
@@ -486,7 +467,7 @@ template <typename T, int WIDTH> class NetworkModule : public Module {
                                        reinterpret_cast<T *>(grad_output.data_ptr()));
 
         this->AllocateWorkspace(batch_size);
-        DeviceMatricesView<T> interm_bwd(network_.get_n_hidden_layers() + 2, batch_size, network_.get_input_width(),
+        DeviceMatricesView<T> interm_bwd(network_.get_n_hidden_layers() + 1, batch_size, network_.get_input_width(),
                                          batch_size, network_.get_network_width(), batch_size,
                                          network_.get_output_width(), interm_backw_ptr_);
         DeviceMatricesView<T> interm_fwd(network_.get_n_hidden_layers() + 2, batch_size, network_.get_input_width(),
@@ -718,7 +699,7 @@ template <typename T_enc, typename T_net, int WIDTH> class NetworkWithEncodingMo
                                            reinterpret_cast<T_net *>(grad_output.data_ptr()));
 
         this->AllocateWorkspace(batch_size);
-        DeviceMatricesView<T_net> interm_bwd(network_->get_network()->get_n_hidden_layers() + 2, batch_size,
+        DeviceMatricesView<T_net> interm_bwd(network_->get_network()->get_n_hidden_layers() + 1, batch_size,
                                              network_->get_network()->get_input_width(), batch_size,
                                              network_->get_network()->get_network_width(), batch_size,
                                              network_->get_network()->get_output_width(), interm_backw_ptr_);
@@ -761,7 +742,7 @@ template <typename T_enc, typename T_net, int WIDTH> class NetworkWithEncodingMo
                                                    reinterpret_cast<T_enc *>(input_from_fwd.data_ptr()));
 
         this->AllocateWorkspace(batch_size);
-        DeviceMatricesView<T_net> interm_bwd(network_->get_network()->get_n_hidden_layers() + 2, batch_size,
+        DeviceMatricesView<T_net> interm_bwd(network_->get_network()->get_n_hidden_layers() + 1, batch_size,
                                              network_->get_network()->get_input_width(), batch_size,
                                              network_->get_network()->get_network_width(), batch_size,
                                              network_->get_network()->get_output_width(), interm_backw_ptr_);

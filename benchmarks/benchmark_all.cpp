@@ -159,30 +159,32 @@ int main() {
         sycl::queue q(sycl::gpu_selector_v);
         // ----------Benchmark for different workloads----------
 
-        // std::cout << "Sycl::half, width 16" << std::endl;
-        // benchmark_all<sycl::half, 16>(q, 0);
-        // std::cout << "Sycl::half, width 32" << std::endl;
-        // benchmark_all<sycl::half, 32>(q, 0);
+        std::cout << "Sycl::half, width 16" << std::endl;
+        benchmark_all<sycl::half, 16>(q, 0);
 
-        // std::cout << "Sycl::half, width 64" << std::endl;
-        // benchmark_all<sycl::half, 64>(q, 0);
+        std::cout << "Sycl::half, width 32" << std::endl;
+        benchmark_all<sycl::half, 32>(q, 0);
 
-        // std::cout << "Sycl::half, width 128" << std::endl;
-        // benchmark_all<sycl::half, 128>(q, 0);
+        std::cout << "Sycl::half, width 64" << std::endl;
+        benchmark_all<sycl::half, 64>(q, 0);
+
+        std::cout << "Sycl::half, width 128" << std::endl;
+        benchmark_all<sycl::half, 128>(q, 0);
 
         // ----------Benchmark over batch sizes----------
 
-        // std::cout << "Sycl::half, width 16" << std::endl;
-        // benchmark_all<sycl::half, 16>(q, 1);
+        std::cout << "Sycl::half, width 16" << std::endl;
+        benchmark_all<sycl::half, 16>(q, 1);
 
-        // std::cout << "Sycl::half, width 32" << std::endl;
-        // benchmark_all<sycl::half, 32>(q, 1);
+        std::cout << "Sycl::half, width 32" << std::endl;
+        benchmark_all<sycl::half, 32>(q, 1);
 
         std::cout << "Sycl::half, width 64" << std::endl;
         benchmark_all<sycl::half, 64>(q, 1);
 
-        // std::cout << "Sycl::half, width 128" << std::endl;
-        // benchmark_all<sycl::half, 128>(q, 1);
+        std::cout << "Sycl::half, width 128" << std::endl;
+        benchmark_all<sycl::half, 128>(q, 1);
+
         MPI_Finalize();
 
     } catch (const std::exception &e) {

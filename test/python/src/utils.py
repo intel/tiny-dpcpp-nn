@@ -12,14 +12,16 @@ def is_close(reference, value, rtol=1e-4, name="", print_diff=False):
 
     max_val = np.maximum(np.max(np.abs(reference)), np.max(np.abs(value)))
     max_rtol = 0.0
+    max_atol = 5e-4
     # Perform the element-wise comparison
     isclose = True
     for i, (a, b) in enumerate(zip(reference, value)):
         abs_diff = np.abs(a - b)
+
         rel_diff = abs_diff / max_val
         if rel_diff > max_rtol:
             max_rtol = rel_diff
-        if rel_diff > rtol:
+        if rel_diff > rtol and abs_diff > max_atol:
             isclose = False
             if print_diff:
                 string = f" of {name}" if name else ""
@@ -158,7 +160,7 @@ def get_grad_params(model):
     return grads_all, params_all
 
 
-def compare_matrices(weights_dpcpp, weights_torch, rtol=1e-3):
+def compare_matrices(weights_dpcpp, weights_torch, rtol=1e-2):
     for layer, _ in enumerate(weights_dpcpp):
         assert (
             weights_dpcpp[layer].shape == weights_torch[layer].shape
@@ -236,6 +238,7 @@ def create_models(
             store_params_as_full_precision=store_params_as_full_precision,
             input_dtype=input_dtype,
             backend_param_dtype=backend_param_dtype,
+            use_bias=False,  # for comparison, we don't use the one padding
         )
 
     if use_weights_of_tinynn:

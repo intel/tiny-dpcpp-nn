@@ -156,7 +156,7 @@ To have all tests, run:
 cmake -DTARGET_DEVICE="PVC" -DBUILD_REF_TEST="ON" -DBUILD_TORCH_TEST="ON" ..
 ```
 
-After all tests are build, you can run `bash test/run_tests.sh` to verfiy that the setup is correct. Please note that we provide tests for both the core `dpcpp` implementation and the `libtorch` wrapper implementation.
+After all tests are build into `build/`, you can run `cd build/ && make tests` to verfiy that the setup is correct. Please note that we provide tests for both the core `dpcpp` implementation and the `libtorch` wrapper implementation.
 
 To test whether the pytorch bindings were installed correctly, please run
 

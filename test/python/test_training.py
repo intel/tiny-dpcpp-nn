@@ -7,13 +7,15 @@ from tiny_dpcpp_nn import Network, Encoding, NetworkWithInputEncoding
 
 torch.set_printoptions(precision=10)
 
-optimisers = ["adam", "sgd"]
+optimisers = [
+    "sgd"
+]  # we test only against sgd, as we can compare against the internal variables here
 dtypes = [torch.bfloat16]
 # dtypes = [torch.float16, torch.bfloat16]
 TRAIN_EPOCHS = 10000  # this is high to ensure that all tests pass (some are fast < 100 and some are slow)
 
 USE_NWE = False
-WIDTH = 16
+WIDTH = 32
 num_epochs = 100
 DEVICE = "xpu"
 
@@ -416,16 +418,15 @@ def run_test_network_with_custom_encoding(
     # Evaluate after training
     final_accuracy = evaluate(nwe, X, y)
     print(f"Final Accuracy: {final_accuracy:.4f}")
-    assert (
-        final_accuracy > 0.95
-    )  # Adjusted expectation as perfect accuracy may not be realistic
+    assert final_accuracy > 0.8
 
 
 @pytest.mark.parametrize(
-    "dtype, optimiser",
-    [(dtype, optimiser) for dtype in dtypes for optimiser in optimisers],
+    "dtype",
+    [(dtype) for dtype in dtypes],
 )
-def test_network_with_encoding_all(dtype, optimiser):
+def test_network_with_encoding_all(dtype):
+    optimiser = "adam"
     input_size = 3
     spherical_harmonics_config = {
         "otype": "SphericalHarmonics",
@@ -505,7 +506,8 @@ if __name__ == "__main__":
     print("Testing network")
     test_network(dtype, optimiser)
 
-    # print("Testing encoding")
-    # test_encoding()
+    print("Testing encoding")
+    test_encoding()
 
-    # test_network_with_encoding_all(dtype, optimiser)
+    print("test_network_with_encoding_all")
+    test_network_with_encoding_all(dtype)

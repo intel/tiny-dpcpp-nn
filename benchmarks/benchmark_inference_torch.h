@@ -27,8 +27,8 @@ double benchmark_inference(const size_t batch_size, const int n_hidden_layers, c
 
     torch::Tensor input = torch::ones({(int)batch_size, input_width}).to(torch::kXPU).to(c10::ScalarType::BFloat16);
 
-    tnn::NetworkModule<T, WIDTH> network(input_width, output_width, n_hidden_layers, Activation::ReLU,
-                                         Activation::None);
+    tnn::NetworkModule<T, WIDTH> network(input_width, output_width, n_hidden_layers, Activation::ReLU, Activation::None,
+                                         false);
 
     tinydpcppnn::benchmarks::common::WriteBenchmarkHeader("Inference", batch_size, WIDTH, n_hidden_layers, sizeof(T),
                                                           type_to_string<T>(), network.get_queue());

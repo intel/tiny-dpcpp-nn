@@ -156,9 +156,11 @@ class Module(torch.nn.Module):
         store_params_as_full_precision=True,
         input_dtype=torch.float16,
         backend_param_dtype=torch.float16,
+        use_bias=True,
     ):
         super(Module, self).__init__()
         self.device = device
+        self.use_bias = use_bias
         self.input_dtype = input_dtype
         self.backend_param_dtype = backend_param_dtype
         self.store_params_as_full_precision = store_params_as_full_precision
@@ -231,7 +233,10 @@ class Module(torch.nn.Module):
                 padded_tensor
                 if input_dim == self.width
                 else torch.nn.functional.pad(
-                    padded_tensor, [0, self.width - input_dim, 0, 0]
+                    padded_tensor,
+                    [0, self.width - input_dim, 0, 0],
+                    "constant",
+                    self.use_bias,
                 )
             ).to(dtype=self.input_dtype)
         info = {"is_in_eval_mode": not self.training}
@@ -272,6 +277,7 @@ class Network(Module):
         device="xpu",
         input_dtype=torch.float16,
         backend_param_dtype=torch.float16,
+        use_bias=True,
     ):
         self.network_config = network_config
 
@@ -289,6 +295,7 @@ class Network(Module):
             input_dtype=input_dtype,
             store_params_as_full_precision=store_params_as_full_precision,
             backend_param_dtype=backend_param_dtype,
+            use_bias=use_bias,
         )
 
     def create_module(self):
@@ -300,6 +307,7 @@ class Network(Module):
             self.output_activation,
             self.width,
             str(self.backend_param_dtype),
+            self.use_bias,
         )
 
 
@@ -314,6 +322,7 @@ class NetworkWithInputEncoding(Module):
         store_params_as_full_precision=True,
         input_dtype=torch.float,
         backend_param_dtype=torch.float16,
+        use_bias=True,
     ):
         self.network_config = network_config
 
@@ -340,6 +349,7 @@ class NetworkWithInputEncoding(Module):
             input_dtype=input_dtype,
             store_params_as_full_precision=store_params_as_full_precision,
             backend_param_dtype=backend_param_dtype,
+            use_bias=use_bias,
         )
 
     def create_module(self):
