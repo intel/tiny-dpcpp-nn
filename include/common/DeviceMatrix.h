@@ -502,6 +502,7 @@ template <typename T> class DeviceMatrices {
         if (src.n() != dest.m() || src.m() != dest.n()) throw std::invalid_argument("Cannot transpose.");
         // TODO: check that the underlying data is actually in the same context.
 
+        // we copy, as one current use is to call device_matrix_view.PackAndTranspose(device_matrix_view)
         T *temp_src = sycl::malloc_device<T>(src.m() * src.n(), q);
         q.memcpy(temp_src, src.GetPointer(), src.m() * src.n() * sizeof(T)).wait();
 

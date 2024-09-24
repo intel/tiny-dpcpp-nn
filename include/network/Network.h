@@ -94,15 +94,13 @@ template <typename T> class Network : public NetworkBase<T> {
                 ". Consider padding input and output to have the same amount as network_width";
             throw std::runtime_error(errorMessage);
         }
-        std::vector<T> packed_weights;
-        if (weights_are_packed) {
-            packed_weights = weights;
-        } else {
-            packed_weights =
-                get_packed_weights<T>(weights, n_hidden_layers_, input_width_, network_width_, output_width_);
+
+        m_weights_matrices.copy_from_host(weights).wait();
+
+        if (!weights_are_packed) {
+            m_weights_matrices.Packed(m_weights_matrices);
         }
 
-        m_weights_matrices.copy_from_host(packed_weights).wait();
         ZeroWeightsPadding(original_input_width_, original_output_width_);
         TransposeWeights(m_weights_matrices, m_weightsT_matrices);
     };

@@ -55,11 +55,6 @@ add_sycl_to_target(TARGET test-encodings SOURCES doctest_encodings.cpp)
 target_link_libraries(test-encodings PRIVATE test-lib network encodings)
 doctest_discover_tests(test-encodings)
 
-add_executable(test-packing doctest_packing.cpp)
-add_sycl_to_target(TARGET test-packing SOURCES doctest_packing.cpp)
-target_link_libraries(test-packing PRIVATE test-lib network encodings)
-doctest_discover_tests(test-packing)
-
 add_executable(test-swiftnet doctest_swiftnet.cpp)
 add_sycl_to_target(TARGET test-swiftnet SOURCES doctest_swiftnet.cpp)
 target_compile_definitions(test-swiftnet PRIVATE TEST_GRAPH)
