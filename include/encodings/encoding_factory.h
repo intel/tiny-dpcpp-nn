@@ -103,6 +103,9 @@ template <typename T> class EncodingFactoryRegistry {
 };
 
 void check_validity_of_config(const json &config) {
+    if( !config.contains(EncodingParams::CHECK_CONFIG) || config[EncodingParams::CHECK_CONFIG] == false ) {
+        return;
+    }
     // Define a list of all possible encoding parameters, see encoding.h
     const std::vector<std::string> valid_keys = {
         EncodingParams::ENCODING,
@@ -120,6 +123,7 @@ void check_validity_of_config(const json &config) {
         EncodingParams::HASH,
         EncodingParams::INTERPOLATION_METHOD,
         EncodingParams::USE_STOCHASTIC_INTERPOLATION,
+        EncodingParams::CHECK_CONFIG,
     };
 
     // Check if every key in the config is within the valid keys
