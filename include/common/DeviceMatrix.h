@@ -373,6 +373,15 @@ template <typename T> class DeviceMatrices {
         }
     }
 
+    void PackAndTranspose(DeviceMatrices<T> &ret) const {
+        if (GetNumberOfMatrices() != ret.GetNumberOfMatrices())
+            throw std::invalid_argument("Need to have same number of matrices for transpose");
+
+        for (uint32_t iter = 0; iter < GetNumberOfMatrices(); iter++) {
+            DeviceMatrices<T>::PackAndTranspose(GetView(iter), ret.GetView(iter), m_q);
+        }
+    }
+
     void PackedTranspose(DeviceMatrices<T> &ret) const {
         if (GetNumberOfMatrices() != ret.GetNumberOfMatrices())
             throw std::invalid_argument("Need to have same number of matrices for transpose");
@@ -430,6 +439,11 @@ template <typename T> class DeviceMatrices {
         if (src.n() != dest.m() || src.m() != dest.n()) throw std::invalid_argument("Cannot transpose.");
         // TODO: check that the underlying data is actually in the same context.
 
+        // Ensure that src and dest are not the same matrix
+        if (src.GetPointer() == dest.GetPointer()) {
+            throw std::invalid_argument("Cannot transpose in place: src and dest are the same.");
+        }
+
         T *const new_p = dest.GetPointer();
         T const *const old_p = src.GetPointer();
         const size_t loc_cols = src.n();
@@ -448,15 +462,16 @@ template <typename T> class DeviceMatrices {
         if (src.n() != dest.m() || src.m() != dest.n()) throw std::invalid_argument("Cannot transpose.");
         // TODO: check that the underlying data is actually in the same context.
 
-        T *const new_p = dest.GetPointer();
+        T *const transposed_p = dest.GetPointer();
         T const *const old_p = src.GetPointer();
         const size_t loc_rows = src.m();
         const size_t loc_cols = src.n();
         q.parallel_for(loc_rows * loc_cols, [=](auto idx) {
             const size_t i = idx / loc_cols;
             const size_t j = idx % loc_cols;
-            new_p[toPackedLayoutCoord(j * loc_rows + i, loc_cols, loc_rows)] =
-                old_p[toPackedLayoutCoord(i * loc_cols + j, loc_rows, loc_cols)];
+            int transposed_idx = j * loc_rows + i;
+            transposed_p[toPackedLayoutCoord(idx, loc_cols, loc_rows)] =
+                old_p[toPackedLayoutCoord(transposed_idx, loc_rows, loc_cols)];
         });
     }
 
@@ -475,11 +490,30 @@ template <typename T> class DeviceMatrices {
         const size_t loc_rows = src.m();
         const size_t loc_cols = src.n();
         q.parallel_for(loc_rows * loc_cols, [=](auto idx) {
-             const size_t i = idx / loc_cols;
-             const size_t j = idx % loc_cols;
-             new_p[toPackedLayoutCoord(j * loc_rows + i, loc_cols, loc_rows)] = temp_src[i * loc_cols + j];
-             // new_p[toPackedLayoutCoord(j * loc_rows + i, loc_cols, loc_rows)] = old_p[i * loc_cols + j];
+             new_p[toPackedLayoutCoord(idx, loc_cols, loc_rows)] = temp_src[idx];
          }).wait();
+
+        // Free the temporary source buffer
+        sycl::free(temp_src, q);
+    }
+
+    // Packs data and then transposes
+    static void PackAndTranspose(const DeviceMatrixView<T> &src, DeviceMatrixView<T> dest, sycl::queue &q) {
+        if (src.n() != dest.m() || src.m() != dest.n()) throw std::invalid_argument("Cannot transpose.");
+        // TODO: check that the underlying data is actually in the same context.
+
+        T *temp_src = sycl::malloc_device<T>(src.m() * src.n(), q);
+        q.memcpy(temp_src, src.GetPointer(), src.m() * src.n() * sizeof(T)).wait();
+
+        T *const transposed_p = dest.GetPointer();
+        const size_t loc_rows = src.m();
+        const size_t loc_cols = src.n();
+        q.parallel_for(loc_rows * loc_cols, [=](auto idx) {
+            const size_t i = idx / loc_cols;
+            const size_t j = idx % loc_cols;
+            int transposed_idx = j * loc_rows + i;
+            transposed_p[toPackedLayoutCoord(idx, loc_rows, loc_cols)] = temp_src[transposed_idx];
+        });
 
         // Free the temporary source buffer
         sycl::free(temp_src, q);

@@ -479,7 +479,7 @@ class EsimdKernels {
             // The derivative of the sigmoid is sigmoid(x) * (1 - sigmoid(x))
             simd<Tdec, N> loc_dec;
             loadRow<TM, COLS_IN, cache_hint::uncached, cache_hint::uncached>(Dec, loc_dec);
-            simd<float, N> sigmoid_result = 1.0f / (1.0f + esimd::exp(-convert<float>(loc_dec)));
+            simd<float, N> sigmoid_result = convert<float>(loc_dec);
             simd<float, N> sigmoid_derivative = sigmoid_result * (1.0f - sigmoid_result);
             simd<float, N> Src_with_derivative = convert<float>(Src) * sigmoid_derivative;
             reBlock<TM, COLS_OUT, COLS_IN>(convert<Tdest>(Src_with_derivative), Dest);

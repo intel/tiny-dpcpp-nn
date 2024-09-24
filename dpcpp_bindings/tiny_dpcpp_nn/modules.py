@@ -1,6 +1,8 @@
 import torch
 import intel_extension_for_pytorch
 import numpy as np
+import time
+
 from tiny_dpcpp_nn_pybind_module import (
     Activation,
     create_network,
@@ -9,6 +11,8 @@ from tiny_dpcpp_nn_pybind_module import (
 )
 
 MIN_BATCH_SIZE = 8  # in tiny-dpcpp-nn the smallest possible batch size is 8
+
+torch.set_printoptions(precision=2)
 
 
 def unpad_tensor_to_input_dim(padded_tensor, output_dim):
@@ -59,12 +63,13 @@ def from_packed_layout_coord(idx, rows, cols):
 
 class _module_function(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, native_tnn_module, input, params, info):
+    def forward(ctx, native_tnn_module, input, params, info, loss_scale):
         batch_size = input.shape[0]
+
         if info["is_in_eval_mode"]:
-            output = native_tnn_module.inference(input.to(params.dtype))
+            output = native_tnn_module.inference(input)
         else:
-            output = native_tnn_module.fwd(input.to(params.dtype))
+            output = native_tnn_module.fwd(input)
 
         if batch_size > 0:
             output = output.reshape(batch_size, -1).to(input.device)
@@ -74,6 +79,8 @@ class _module_function(torch.autograd.Function):
         ctx.save_for_backward(input, output, params)
         ctx.info = info
         ctx.native_tnn_module = native_tnn_module
+        ctx.loss_scale = loss_scale
+
         if "output_dim" in info:
             return output[
                 ..., : info["output_dim"]
@@ -85,6 +92,8 @@ class _module_function(torch.autograd.Function):
     @staticmethod
     def backward(ctx, doutput):
         input, _, params = ctx.saved_tensors
+        loss_scale = ctx.loss_scale
+
         if "width" in ctx.info:
             doutput = torch.hstack(
                 (
@@ -96,9 +105,7 @@ class _module_function(torch.autograd.Function):
             )
 
         batch_size = input.shape[0]
-        loss_scale = 1.0  # because half precision
         doutput = doutput * loss_scale
-
         with torch.no_grad():
             if "encoding_config" in ctx.info:
                 input_grad = None
@@ -124,43 +131,53 @@ class _module_function(torch.autograd.Function):
                         False,  # don't pack the grad, don't get dldinput
                     )
             else:
+                # This is Network only
                 pack_weights = True
                 input_grad, grad = ctx.native_tnn_module.bwd_no_encoding_grad(
                     doutput, pack_weights, True  # pack the grad, get dldinput
                 )
                 if input_grad is not None:
                     input_grad = input_grad.reshape(batch_size, -1)
+
         grad = None if grad is None else (grad / loss_scale)
         input_grad = None if input_grad is None else (input_grad / loss_scale)
 
-        # 4 inputs to forward, so need 4 grads
-        return (None, input_grad, grad, None)
+        # 5 inputs to forward, so need 5 grads
+        return (None, input_grad, grad, None, None)
 
 
 class Module(torch.nn.Module):
-    def __init__(self, create_params=False, device="xpu", dtype=torch.bfloat16):
+    def __init__(
+        self,
+        device="xpu",
+        store_params_as_full_precision=True,
+        input_dtype=torch.float16,
+        backend_param_dtype=torch.float16,
+        use_bias=True,
+    ):
         super(Module, self).__init__()
         self.device = device
-        self.dtype = dtype
+        self.use_bias = use_bias
+        self.input_dtype = input_dtype
+        self.backend_param_dtype = backend_param_dtype
+        self.store_params_as_full_precision = store_params_as_full_precision
+        if backend_param_dtype == torch.float16:
+            self.loss_scale = 128.0
+        else:
+            self.loss_scale = 1.0
 
         self.tnn_module = self.create_module()
-        if self.tnn_module.n_params() and create_params:
-            torch_params = (
-                torch.ones(self.tnn_module.n_params(), 1).to(dtype=self.dtype) * 0.1
-            )
-            # Set the initial parameters based on the transformed torch_params
-            initial_params = self.tnn_module.initial_params(torch_params.to(device))
-            # Creating the torch.nn.Parameter object with the initialized tensor
-            self.params = torch.nn.Parameter(
-                initial_params.to(device), requires_grad=True
-            )
-        elif self.tnn_module.n_params():
-            initial_params = self.tnn_module.initial_params()
 
-            # Creating the torch.nn.Parameter object with the initialized tensor
-            self.params = torch.nn.Parameter(
-                initial_params.to(device), requires_grad=True
+        if self.tnn_module.n_params():
+            initial_params = self.tnn_module.initial_params()
+            # This explicitely creates a tensor whose memory is managed by PyTorch in modules.py
+            params_dtype = (
+                torch.float32
+                if self.store_params_as_full_precision
+                else self.backend_param_dtype
             )
+            cloned_params = initial_params.clone().detach().to(params_dtype)
+            self.params = torch.nn.Parameter(cloned_params, requires_grad=True)
         else:
             print(
                 "No params initialised, as n_params = 0. This is correct for Encodings (apart from grid encodings)."
@@ -169,98 +186,32 @@ class Module(torch.nn.Module):
                 self.device
             )
 
-    def get_reshaped_params(
-        self,
-        weights=None,
-        datatype=torch.float,
-        is_packed_format=True,
-        is_transposed=True,
-    ):
-        if not is_transposed:
-            raise RuntimeError(
-                "All matrices should be transposed by now, please check first"
-            )
-        all_weights = []
-        if weights is None:
-            weights = self.params
+    def set_params(self, params=None):
+        if not self.tnn_module.n_params():
+            if params is not None:
+                raise RuntimeError("Network has no parameters. Cannot set params")
+            else:  # don't do anything if no params to be set
+                return
 
-        n_input_dims = (
-            self.width if self.n_input_dims <= self.width else self.n_input_dims
-        )  # because we pad
-        input_matrix = (
-            torch.zeros(self.width, n_input_dims).to(datatype).to(self.device)
-        )
+        packed = params is None
 
-        for i in range(n_input_dims):
-            for j in range(self.width):
-                if is_packed_format:
-                    idx = to_packed_layout_coord(
-                        i * self.width + j, n_input_dims, self.width
-                    )
-                else:
-                    idx = i * self.width + j
-                if is_transposed:
-                    input_matrix[j, i] = weights[idx]
-                else:
-                    input_matrix[i, j] = weights[idx]
+        if params is None:
+            # this forces the backend to use the self.params which were overwritten in python only (pointing to different backend arrays)
+            params = self.params
 
-        len_input_matrix = input_matrix.shape[0] * input_matrix.shape[1]
-        hidden_layer_size = self.width * self.width
-        hidden_matrices = []
+        assert isinstance(params, torch.Tensor), "Params is not a torch.Tensor"
 
-        for nth_hidden in range(self.n_hidden_layers - 1):
-            hidden_matrix = (
-                torch.zeros(self.width, self.width).to(datatype).to(self.device)
-            )
+        self.tnn_module.set_params(params.to(self.backend_param_dtype), packed)
 
-            for i in range(self.width):
-                for j in range(self.width):
-                    if is_packed_format:
-                        idx = to_packed_layout_coord(
-                            i * self.width + j, self.width, self.width
-                        )
-                    else:
-                        idx = i * self.width + j
-                    if is_transposed:
-                        hidden_matrix[j, i] = weights[
-                            len_input_matrix + nth_hidden * hidden_layer_size + idx
-                        ]
-                    else:
-                        hidden_matrix[i, j] = weights[
-                            len_input_matrix + nth_hidden * hidden_layer_size + idx
-                        ]
-            hidden_matrices.append(hidden_matrix)
+        if not packed:
+            packed_weights = self.get_params()  # this is always packed params
 
-        output_matrix = torch.zeros(self.width, self.width).to(datatype).to(self.device)
+            # Set self.params to the params passed. Backend dpcpp and python seem to be different underlying memories
+            self.params.data.copy_(packed_weights)
 
-        for i in range(self.width):
-            for j in range(
-                self.width
-            ):  # the weights in Swiftnet are padded to width with zeros
-                if is_packed_format:
-                    idx = to_packed_layout_coord(
-                        i * self.width + j, self.width, self.width
-                    )
-                else:
-                    idx = i * self.width + j
-                if is_transposed:
-                    output_matrix[j, i] = weights[
-                        len_input_matrix
-                        + (self.n_hidden_layers - 1) * hidden_layer_size
-                        + idx
-                    ]
-                else:
-                    output_matrix[i, j] = weights[
-                        len_input_matrix
-                        + (self.n_hidden_layers - 1) * hidden_layer_size
-                        + idx
-                    ]
-
-        all_weights.append(input_matrix)
-        all_weights.extend(hidden_matrices)
-        all_weights.append(output_matrix[: self.n_output_dims, ...])
-
-        return all_weights
+    def get_params(self):
+        # return packed params. Currently tnn_module.initial_params() does the same as get_params()
+        return self.tnn_module.get_params()
 
     def forward(self, x):
         batch_size, input_dim = x.shape
@@ -272,16 +223,19 @@ class Module(torch.nn.Module):
             x
             if batch_size == padded_batch_size
             else torch.nn.functional.pad(x, [0, 0, 0, padded_batch_size - batch_size])
-        ).to(dtype=self.dtype)
+        ).to(dtype=self.input_dtype)
 
         if self.name == "network":
             padded_tensor = (
                 padded_tensor
                 if input_dim == self.width
                 else torch.nn.functional.pad(
-                    padded_tensor, [0, self.width - input_dim, 0, 0]
+                    padded_tensor,
+                    [0, self.width - input_dim, 0, 0],
+                    "constant",
+                    self.use_bias,
                 )
-            ).to(dtype=self.dtype)
+            ).to(dtype=self.input_dtype)
         info = {"is_in_eval_mode": not self.training}
 
         if hasattr(self, "n_hidden_layers"):
@@ -299,11 +253,13 @@ class Module(torch.nn.Module):
             # added for NWE and encoding
             info.update({"encoding_config": self.encoding_config})
 
+        self.set_params()
         output = _module_function.apply(
             self.tnn_module,
             padded_tensor.contiguous(),
             self.params,
             info,
+            self.loss_scale,
         )
         return output[:batch_size, ...]
 
@@ -314,8 +270,11 @@ class Network(Module):
         n_input_dims,
         n_output_dims,
         network_config,
+        store_params_as_full_precision=True,
         device="xpu",
-        dtype=torch.bfloat16,
+        input_dtype=torch.float16,
+        backend_param_dtype=torch.float16,
+        use_bias=True,
     ):
         self.network_config = network_config
 
@@ -328,7 +287,13 @@ class Network(Module):
             self.network_config["output_activation"]
         )
         self.name = "network"
-        super().__init__(device=device, dtype=dtype)
+        super().__init__(
+            device=device,
+            input_dtype=input_dtype,
+            store_params_as_full_precision=store_params_as_full_precision,
+            backend_param_dtype=backend_param_dtype,
+            use_bias=use_bias,
+        )
 
     def create_module(self):
         return create_network(
@@ -338,6 +303,8 @@ class Network(Module):
             self.activation,
             self.output_activation,
             self.width,
+            str(self.backend_param_dtype),
+            self.use_bias,
         )
 
 
@@ -349,7 +316,10 @@ class NetworkWithInputEncoding(Module):
         network_config,
         encoding_config,
         device="xpu",
-        dtype=torch.bfloat16,
+        store_params_as_full_precision=True,
+        input_dtype=torch.float,
+        backend_param_dtype=torch.float16,
+        use_bias=True,
     ):
         self.network_config = network_config
 
@@ -368,8 +338,16 @@ class NetworkWithInputEncoding(Module):
 
         if "n_dims_to_encode" not in self.encoding_config:
             self.encoding_config["n_dims_to_encode"] = self.n_input_dims
-
-        super().__init__(device=device, dtype=dtype)
+        assert (
+            input_dtype == torch.float
+        ), f"Currently only torch.float supported as input_dtype. {input_dtype} was chosen instead"
+        super().__init__(
+            device=device,
+            input_dtype=input_dtype,
+            store_params_as_full_precision=store_params_as_full_precision,
+            backend_param_dtype=backend_param_dtype,
+            use_bias=use_bias,
+        )
 
     def create_module(self):
 
@@ -381,6 +359,7 @@ class NetworkWithInputEncoding(Module):
             self.output_activation,
             self.encoding_config,
             self.width,
+            str(self.backend_param_dtype),
         )
 
 
@@ -390,7 +369,9 @@ class Encoding(Module):
         n_input_dims,
         encoding_config,
         device="xpu",
-        dtype=torch.float,
+        input_dtype=torch.float,
+        store_params_as_full_precision=True,
+        backend_param_dtype=torch.float,
     ):
         self.n_input_dims = n_input_dims
 
@@ -402,7 +383,20 @@ class Encoding(Module):
         if "n_dims_to_encode" not in self.encoding_config:
             self.encoding_config["n_dims_to_encode"] = self.n_input_dims
 
-        super().__init__(device=device, dtype=dtype)
+        assert (
+            input_dtype == torch.float
+        ), "Only torch.float is currently supported for encoding"
+        assert (
+            backend_param_dtype == torch.float
+        ), "Only torch.float is currently supported for encoding"
+        # Spherical and identity can have non-float, but grid encoding needs
+        # float, as half precision atomics are currently not supported in SYCL
+        super().__init__(
+            device=device,
+            input_dtype=input_dtype,
+            store_params_as_full_precision=store_params_as_full_precision,
+            backend_param_dtype=backend_param_dtype,
+        )
 
         self.n_output_dims = self.tnn_module.n_output_dims()
 

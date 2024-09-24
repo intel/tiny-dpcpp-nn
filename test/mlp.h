@@ -130,8 +130,8 @@ double sigmoid(double x) { return 1.0 / (1.0 + std::exp(-x)); }
 
 double dsigmoid(double x) {
     // Calculating the derivative of the sigmoid function using its output
-    double s = sigmoid(x);
-    return s * (1 - s);
+    // the input is already activated
+    return x * (1 - x);
 }
 // MLP class using 'Matrix' struct for matrix operations
 template <typename T> class MLP {
@@ -376,8 +376,9 @@ template <typename T> class MLP {
     std::vector<T> getUnpackedWeights() const {
         std::vector<T> all_weights;
         for (const Matrix<T> &weight_matrix : weights) {
-
-            for (const std::vector<T> &row : weight_matrix.data) {
+            for (const std::vector<T> &row : weight_matrix.transpose().data) {
+                // using transpose as tiny-nn expects (input_width, width) as input matrix whereas we define it as
+                // (width, input_width here)
                 all_weights.insert(all_weights.end(), row.begin(), row.end());
             }
         }

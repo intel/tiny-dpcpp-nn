@@ -11,7 +11,7 @@
         "l2_reg": 1e-6
     },
     "encoding": {
-        "otype": "Grid",
+        "otype": "HashGrid",
         "type": "Hash",
         "n_levels": 16,
         "n_features_per_level": 2,

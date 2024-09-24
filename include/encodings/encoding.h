@@ -39,14 +39,14 @@ struct EncodingParams {
     inline static const std::string SCALE = "scale";                               // float
     inline static const std::string OFFSET = "offset";                             // float
     inline static const std::string HASH = "hash";                                 // HashType
-    inline static const std::string INTERPOLATION_METHOD = "interpolation_method"; // InterpolationType
+    inline static const std::string INTERPOLATION_METHOD = "interpolation";        // InterpolationType
     inline static const std::string USE_STOCHASTIC_INTERPOLATION = "stochastic_interpolation"; // bool
 };
 
 struct EncodingNames {
     inline static const std::string IDENTITY = "Identity";
     inline static const std::string SPHERICALHARMONICS = "SphericalHarmonics";
-    inline static const std::string GRID = "Grid";
+    inline static const std::string GRID = "HashGrid";
 };
 
 enum class GradientMode {

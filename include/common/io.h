@@ -1,10 +1,10 @@
 #pragma once
 
+#include "common.h"
 #include "encoding.h"
 #include "json.hpp"
 #include <string>
 #include <unordered_map>
-
 namespace io {
 
 using json = nlohmann::json;
@@ -36,8 +36,7 @@ template <typename T> T stringToEnum(const std::string &value, const std::unorde
     if (it != enumMap.end()) {
         return it->second;
     }
-    // Handle error or default case here
-    // For example, you can throw an exception if the value is not found
+
     throw std::runtime_error("Invalid enum value");
 }
 
@@ -62,7 +61,7 @@ json loadJsonConfig(const std::string &filename) {
 
 // Function to validate and copy encoding_config with correct enums
 json validateAndCopyEncodingConfig(const json &encodingConfig) {
-    json encodingConfigCopy = encodingConfig; // Start by making a copy of the entire input JSON
+    json encodingConfigCopy = encodingConfig;
 
     auto convertIfString = [&encodingConfigCopy](const auto &enumMap, const std::string &key) {
         if (encodingConfigCopy.contains(key) && encodingConfigCopy[key].is_string()) {
@@ -77,45 +76,6 @@ json validateAndCopyEncodingConfig(const json &encodingConfig) {
     convertIfString(interpolationTypeMap, EncodingParams::INTERPOLATION_METHOD);
 
     return encodingConfigCopy;
-}
-
-template <typename T, int WIDTH>
-std::vector<T> get_packed_weights(std::vector<T> unpacked_weights, int m_n_hidden_layers, int input_width,
-                                  int output_width) {
-    std::vector<T> weights_packed(unpacked_weights.size(), 0.0);
-
-    for (int idx = 0; idx < weights_packed.size(); idx++) {
-
-        int i = 0;
-        int j = 0;
-        if (idx < input_width * WIDTH) {
-
-            i = idx / WIDTH; // rows
-            j = idx % WIDTH; // cols
-
-            weights_packed[toPackedLayoutCoord(i + j * WIDTH, WIDTH, WIDTH)] = unpacked_weights[idx];
-        } else if ((idx >= input_width * WIDTH) &&
-                   (idx < input_width * WIDTH + (m_n_hidden_layers - 1) * WIDTH * WIDTH)) {
-            int layer = (idx - input_width * WIDTH) / (WIDTH * WIDTH);
-            int mat_offset = (idx - (input_width * WIDTH + layer * WIDTH * WIDTH)) % (WIDTH * WIDTH);
-
-            i = mat_offset / WIDTH; // rows
-            j = mat_offset % WIDTH; // cols
-
-            weights_packed[input_width * WIDTH + layer * WIDTH * WIDTH +
-                           toPackedLayoutCoord(i + j * WIDTH, WIDTH, WIDTH)] = unpacked_weights[idx];
-        } else {
-            int mat_offset =
-                (idx - input_width * WIDTH - (m_n_hidden_layers - 1) * WIDTH * WIDTH) % (WIDTH * output_width);
-            i = mat_offset / WIDTH; // rows
-            j = mat_offset % WIDTH; // cols
-
-            weights_packed[input_width * WIDTH + (m_n_hidden_layers - 1) * WIDTH * WIDTH +
-                           toPackedLayoutCoord(i + j * WIDTH, WIDTH, WIDTH)] = unpacked_weights[idx];
-        }
-    }
-
-    return weights_packed;
 }
 
 template <typename T, int WIDTH>
@@ -143,7 +103,7 @@ std::vector<T> load_weights_as_packed_from_file(std::string filename, int m_n_hi
 
     file.close();
 
-    return get_packed_weights<T, WIDTH>(data_vec, m_n_hidden_layers, input_width, output_width);
+    return get_packed_weights<T>(data_vec, m_n_hidden_layers, input_width, WIDTH, output_width);
 }
 
 template <typename T> std::vector<T> loadVectorFromCSV(const std::string &filename) {
@@ -237,5 +197,25 @@ void saveImageToPGM(const std::string &filename, const int width, const int heig
 
     // Close the file
     outputFile.close();
+}
+
+template <typename T>
+void printDeviceMatrix(const DeviceMatricesView<T> &device_matrices_view, sycl::queue &q, int line_break_every) {
+    // Calculate the total number of elements to copy from the device memory
+    size_t total_elements = device_matrices_view.nelements();
+
+    // Create a host vector to store the copied data
+    std::vector<T> host_vector(total_elements);
+
+    // Copy the data from the device to the host vector
+    q.memcpy(host_vector.data(), device_matrices_view.GetMatrixPointer(0), total_elements * sizeof(T)).wait();
+
+    // Print the contents of the vector
+    for (size_t i = 0; i < total_elements; ++i) {
+        std::cout << host_vector[i] << ", ";
+        // Add a newline for better readability, you can adjust the number based on expected dimensions for
+        // visualization
+        if ((i + 1) % line_break_every == 0) std::cout << "========================" << std::endl;
+    }
 }
 } // namespace io

@@ -31,8 +31,8 @@ double benchmark_training(const size_t batch_size, const int n_hidden_layers, co
     constexpr int output_width = WIDTH;
     constexpr float weight_val = 1.0 / WIDTH;
 
-    tnn::NetworkModule<T, WIDTH> network(input_width, output_width, n_hidden_layers, Activation::ReLU,
-                                         Activation::None);
+    tnn::NetworkModule<T, WIDTH> network(input_width, output_width, n_hidden_layers, Activation::ReLU, Activation::None,
+                                         false);
 
     tinydpcppnn::benchmarks::common::WriteBenchmarkHeader("Training (forw+backw, no opt, no loss)", batch_size, WIDTH,
                                                           n_hidden_layers, sizeof(T), type_to_string<T>(),

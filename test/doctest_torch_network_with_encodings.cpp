@@ -52,10 +52,7 @@ void test_network_with_encoding_backward(sycl::queue &q, const int input_width, 
                                                             network_activation, Activation::None, encoding_config);
 
     std::vector<T_net> unpacked_weights = mlp_cpp::convert_vector<float, T_net>(mlp.getUnpackedWeights());
-    auto network_torch_params =
-        tnn::Module::convertVectorToTensor<T_net>(
-            io::get_packed_weights<T_net, WIDTH>(unpacked_weights, n_hidden_layers, input_width, WIDTH))
-            .to(torch::kFloat32);
+    auto network_torch_params = tnn::Module::convertVectorToTensor<T_net>(unpacked_weights).to(torch::kFloat32);
     torch::Tensor torch_params = network_torch_params;
     Net.initialize_params(torch_params);
     auto output_net = Net.forward_pass(torch::ones({batch_size, input_width}).to(torch::kXPU) * input_val);
@@ -442,9 +439,9 @@ TEST_CASE("tinydpcppnn::network_with_encoding step-by-step") {
 TEST_CASE("Network with Identity Encoding - test bwd unpadded") {
     sycl::queue q(sycl::gpu_selector_v);
     const int n_hidden_layers = 1;
-    auto test_function = [=](sycl::queue &q, const int width, const int batch_size, std::string activation,
+    auto test_function = [=](auto T_type, sycl::queue &q, const int width, const int batch_size, std::string activation,
                              std::string weight_init_mode) {
-        typedef sycl::ext::oneapi::bfloat16 T;
+        using T = decltype(T_type);
         if (width == 16) {
             // Define the parameters for creating IdentityEncoding
             const json encoding_config{{EncodingParams::N_DIMS_TO_ENCODE, width},
@@ -485,15 +482,24 @@ TEST_CASE("Network with Identity Encoding - test bwd unpadded") {
     std::string activations[] = {"linear", "relu"};
     std::string weight_init_modes[] = {"constant", "random"};
 
-    for (int batch_size : batch_sizes) {
-        for (int width : widths) {
-            for (std::string activation : activations) {
-                for (std::string weight_init_mode : weight_init_modes) {
-                    std::string testName = "Testing grad WIDTH " + std::to_string(width) +
-                                           " - activation: " + activation + " - weight_init_mode: " + weight_init_mode +
-                                           " - Batch size: " + std::to_string(batch_size);
-                    SUBCASE(testName.c_str()) {
-                        CHECK_NOTHROW(test_function(q, width, batch_size, activation, weight_init_mode));
+    auto bf16_type = sycl::ext::oneapi::bfloat16{};
+    auto half_type = sycl::half{};
+
+    std::array<decltype(bf16_type), 2> types = {bf16_type, half_type};
+    for (auto type : types) {
+        std::string type_name = (type == bf16_type) ? "bfloat16" : "half";
+
+        for (int batch_size : batch_sizes) {
+            for (int width : widths) {
+                for (std::string activation : activations) {
+                    for (std::string weight_init_mode : weight_init_modes) {
+                        std::string testName = "Testing grad " + type_name + " WIDTH " + std::to_string(width) +
+                                               " - activation: " + activation +
+                                               " - weight_init_mode: " + weight_init_mode +
+                                               " - Batch size: " + std::to_string(batch_size);
+                        SUBCASE(testName.c_str()) {
+                            CHECK_NOTHROW(test_function(type, q, width, batch_size, activation, weight_init_mode));
+                        }
                     }
                 }
             }

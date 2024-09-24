@@ -102,7 +102,47 @@ template <typename T> class EncodingFactoryRegistry {
     std::unordered_map<std::string, std::unique_ptr<EncodingFactory<T>>> factories_;
 };
 
+void check_validity_of_config(const json &config) {
+    // Define a list of all possible encoding parameters, see encoding.h
+    const std::vector<std::string> valid_keys = {
+        EncodingParams::ENCODING,
+        EncodingParams::N_DIMS_TO_ENCODE,
+        EncodingParams::GRID_TYPE,
+        EncodingParams::N_LEVELS,
+        EncodingParams::N_FEATURES,
+        EncodingParams::N_FEATURES_PER_LEVEL,
+        EncodingParams::LOG2_HASHMAP_SIZE,
+        EncodingParams::BASE_RESOLUTION,
+        EncodingParams::PER_LEVEL_SCALE,
+        EncodingParams::DEGREE,
+        EncodingParams::SCALE,
+        EncodingParams::OFFSET,
+        EncodingParams::HASH,
+        EncodingParams::INTERPOLATION_METHOD,
+        EncodingParams::USE_STOCHASTIC_INTERPOLATION,
+    };
+
+    // Check if every key in the config is within the valid keys
+    for (const auto &config_key : config.items()) {
+        if (std::find(valid_keys.begin(), valid_keys.end(), config_key.key()) == valid_keys.end()) {
+            // If a key in the config JSON is not found in the valid_keys list, throw an exception
+            std::string supported_keys = "";
+            for (const auto &key : valid_keys) {
+                supported_keys += key + ", ";
+            }
+            if (!supported_keys.empty()) {
+                supported_keys.pop_back(); // Remove trailing comma and space
+                supported_keys.pop_back();
+            }
+            throw std::invalid_argument("Unsupported key found in config: " + config_key.key() +
+                                        ". Supported keys are: [" + supported_keys + "]");
+        }
+    }
+}
+
 template <typename T> std::shared_ptr<Encoding<T>> create_encoding(const json &config) {
+    check_validity_of_config(config);
+
     // Create a registry for encoding factories
     EncodingFactoryRegistry<T> encodingRegistry;
     if (!config.contains(EncodingParams::ENCODING))
@@ -117,7 +157,9 @@ template <typename T> std::shared_ptr<Encoding<T>> create_encoding(const json &c
         else if (name == EncodingNames::GRID)
             encodingRegistry.registerFactory(name, std::make_unique<GridEncodingFactory<T>>());
         else
-            throw std::invalid_argument("Encoding name unknown");
+            throw std::invalid_argument("Encoding name unknown: " + name +
+                                        ". Currently supported: " + EncodingNames::IDENTITY + ", " +
+                                        EncodingNames::SPHERICALHARMONICS + ", " + EncodingNames::GRID + ".");
     }
 
     return encodingRegistry.create(config);
