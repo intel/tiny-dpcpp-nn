@@ -86,7 +86,7 @@ class Module {
     }
 
     // Specialization for bf16, which handles the bfloat16 tensors.
-    template <> static std::vector<bf16> convertTensorToVector(const torch::Tensor &tensor) {
+    template <> std::vector<bf16> convertTensorToVector<bf16>(const torch::Tensor &tensor) {
         // Move the tensor to the CPU if it's not already there, also need to convert to float, as there's no data_ptr
         // for bfloat16
         auto tensor_cpu = tensor.to(torch::kCPU).to(torch::kFloat32);
@@ -103,7 +103,7 @@ class Module {
     }
 
     // Specialization for fp16
-    template <> static std::vector<fp16> convertTensorToVector<fp16>(const torch::Tensor &tensor) {
+    template <> std::vector<fp16> convertTensorToVector<fp16>(const torch::Tensor &tensor) {
         auto tensor_cpu = tensor.to(torch::kCPU).to(torch::kFloat32);
 
         const auto *begin = tensor_cpu.data_ptr<float>();
@@ -131,7 +131,7 @@ class Module {
         return tensor.to(torch::kXPU);
     }
 
-    template <> static torch::Tensor convertVectorToTensor(const std::vector<bf16> &v) {
+    template <> torch::Tensor convertVectorToTensor<bf16>(const std::vector<bf16> &v) {
         const torch::TensorOptions &options = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
         std::vector<float> float_vector;
         float_vector.reserve(v.size()); // Reserve space to improve performance
@@ -147,7 +147,7 @@ class Module {
         return tensor.to(torch::kXPU);
     }
 
-    template <> static torch::Tensor convertVectorToTensor(const std::vector<fp16> &v) {
+    template <> torch::Tensor convertVectorToTensor<fp16>(const std::vector<fp16> &v) {
         const torch::TensorOptions &options = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
         std::vector<float> float_vector;
         float_vector.reserve(v.size()); // Reserve space to improve performance
