@@ -824,7 +824,7 @@ class GridEncodingTemplated : public GridEncoding<T> {
         // params_full_precision, -1e-4f * scale, 1e-4f * scale);
 
         constexpr std::uint64_t seed = 777;
-        oneapi::mkl::rng::philox4x32x10 engine(dpct::get_default_queue(), seed);
+        oneapi::mkl::rng::philox4x32x10 engine(dpct::get_default_queue(), seed); //this cannot work correctly since we use a different queue.
         oneapi::mkl::rng::uniform<float> distribution(-1e-4f * scale, 1e-4f * scale);
         oneapi::mkl::rng::generate(distribution, engine, this->n_params(), params_full_precision).wait();
     }
