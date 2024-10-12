@@ -259,6 +259,9 @@ template <typename T, int WIDTH> class SwiftNetMLP : public Network<T> {
         if (Network<T>::get_queue().get_device().template get_info<sycl::info::device::name>().find("Arc") ==
             std::string::npos && 
             Network<T>::get_queue().get_device().template get_info<sycl::info::device::name>().find("Flex") ==
+            std::string::npos &&
+            // In WSL2 the device name is just "Intel(R) Graphics"
+            Network<T>::get_queue().get_device().template get_info<sycl::info::device::name>().find("Intel(R) Graphics") ==
             std::string::npos)
             throw std::logic_error("Code built for ARC GPU but tried to run on different device.");
 #else
