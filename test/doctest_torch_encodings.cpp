@@ -163,7 +163,7 @@ TEST_CASE("EncodingModule::Identity") {
 #endif
 }
 
-TEST_CASE("tinydpcppnn::encoding Spherical Harmonics") {
+TEST_CASE("EncodingModule::Spherical Harmonics") {
     sycl::queue q;
 
     SUBCASE("Not padded") {
@@ -204,7 +204,7 @@ TEST_CASE("tinydpcppnn::encoding Spherical Harmonics") {
 #endif
 }
 
-TEST_CASE("tinydpcppnn::encoding Grid Encoding") {
+TEST_CASE("EncodingModule::Grid Encoding") {
     SUBCASE("Test grid encoding using create_grid_encoding instead of factory") {
         // SWIFTNET
         const int input_width = 3;

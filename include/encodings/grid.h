@@ -25,8 +25,6 @@
 #include <sycl/sycl.hpp>
 #include <vector>
 
-#include "oneapi/mkl/rng.hpp"
-
 using json = nlohmann::json;
 
 namespace tinydpcppnn {
@@ -524,18 +522,23 @@ class GridEncodingTemplated : public GridEncoding<T> {
   public:
     using grad_t = float;
 
-    GridEncodingTemplated(uint32_t n_features, uint32_t log2_hashmap_size, uint32_t base_resolution,
-                          float per_level_scale, bool stochastic_interpolation, InterpolationType interpolation_type,
-                          GridType grid_type)
-        : m_n_features{n_features}, m_log2_hashmap_size{log2_hashmap_size}, m_base_resolution{base_resolution},
+    GridEncodingTemplated(const uint32_t padded_output_width, const uint32_t n_features, 
+        const uint32_t log2_hashmap_size, const uint32_t base_resolution,
+        const float per_level_scale, const bool stochastic_interpolation, const InterpolationType interpolation_type,
+        const GridType grid_type, sycl::queue& Q) : 
+          GridEncoding<T>(N_POS_DIMS, n_features, padded_output_width, Q), 
+          m_n_features{n_features}, 
+          m_log2_hashmap_size{log2_hashmap_size}, m_base_resolution{base_resolution},
           m_per_level_scale{per_level_scale}, m_stochastic_interpolation{stochastic_interpolation},
-          m_interpolation_type{interpolation_type}, m_grid_type{grid_type} {
+          m_interpolation_type{interpolation_type}, m_grid_type{grid_type} 
+    {
+
         m_n_levels = tinydpcppnn::math::div_round_up(m_n_features, N_FEATURES_PER_LEVEL);
         uint32_t offset = 0;
 
         if (m_n_levels > MAX_N_LEVELS)
-            throw std::runtime_error{tinydpcppnn::format("GridEncoding: m_n_levels={} must be at most MAX_N_LEVELS={}",
-                                                         m_n_levels, MAX_N_LEVELS)};
+            throw std::runtime_error("GridEncoding: m_n_levels= " + std::to_string(m_n_levels) + 
+                " must be at most MAX_N_LEVELS= " + std::to_string(MAX_N_LEVELS));
 
         for (uint32_t i = 0; i < m_n_levels; ++i) {
             // Compute number of dense params required for the given level
@@ -549,57 +552,58 @@ class GridEncodingTemplated : public GridEncoding<T> {
             // Make sure memory accesses will be aligned
             params_in_level = tinydpcppnn::math::next_multiple(params_in_level, 8u);
 
-            if (grid_type == GridType::Dense) {
+            if (m_grid_type == GridType::Dense) {
             } // No-op
-            else if (grid_type == GridType::Tiled)
+            else if (m_grid_type == GridType::Tiled)
                 params_in_level = std::min(params_in_level, tinydpcppnn::math::powi(base_resolution, N_POS_DIMS));
-            else if (grid_type == GridType::Hash)
+            else if (m_grid_type == GridType::Hash)
                 params_in_level = std::min(params_in_level, (1u << log2_hashmap_size));
             else
-                throw std::runtime_error{tinydpcppnn::format("GridEncoding: invalid grid type {}", (int)grid_type)};
+                throw std::invalid_argument("GridEncoding: invalid grid type " + std::to_string((int)m_grid_type));
 
             m_offset_table.data[i] = offset;
             offset += params_in_level;
-
-            log_debug("GridEncoding at level {}: resolution={} params_in_level={}", i, resolution, params_in_level);
         }
 
         m_offset_table.data[m_n_levels] = offset;
         m_offset_table.size = m_n_levels + 1;
 
-        this->m_n_params = m_offset_table.data[m_n_levels] * N_FEATURES_PER_LEVEL;
-        m_n_output_dims = m_n_features;
+        // allocate the params
+        this->m_params = std::make_shared<DeviceMatrix<T>>(m_offset_table.data[m_n_levels], N_FEATURES_PER_LEVEL, this->get_queue());
+        this->m_params->fill_random(-1e-4f, 1e-4f).wait(); //init params 
+        // this->m_n_params = m_offset_table.data[m_n_levels] * N_FEATURES_PER_LEVEL;
 
         if (n_features % N_FEATURES_PER_LEVEL != 0)
-            throw std::runtime_error{
-                tinydpcppnn::format("GridEncoding: n_features={} must be a multiple of N_FEATURES_PER_LEVEL = {} ",
-                                    n_features, N_FEATURES_PER_LEVEL)};
+            throw std::runtime_error("GridEncoding: n_features= " + std::to_string(n_features) + " must be a multiple of N_FEATURES_PER_LEVEL = {} " +
+                                    std::to_string(N_FEATURES_PER_LEVEL));
     }
 
-    std::unique_ptr<Context> forward_impl(sycl::queue *const q, const DeviceMatrixView<float> input,
+    std::unique_ptr<Context> forward_impl(const DeviceMatrixView<float> input,
                                           DeviceMatrixView<T> *output = nullptr, bool use_inference_params = false,
                                           bool prepare_input_gradients = false) override {
-        if (padded_output_width() == 0) throw std::invalid_argument("Can't have width == 0");
+
+        if (this->get_padded_output_width() == 0) throw std::invalid_argument("Can't have width == 0");
         if (use_inference_params) throw std::invalid_argument("Can't use inference params.");
         if (prepare_input_gradients) throw std::invalid_argument("Can't prepare input gradients");
         if (!output) return nullptr;
-        if (!q) throw std::invalid_argument("Invalid queue ptr");
-        if (output->n() != padded_output_width())
-            throw std::invalid_argument("Dimension mismatch grid encoding forw_impl");
+        if (output->n() != this->get_padded_output_width())
+            throw std::invalid_argument("Dimension mismatch grid encoding forw_impl output");
+        if (input.n() != this->get_input_width())
+            throw std::invalid_argument("Dimension mismatch grid encoding forw_impl input");
 
         const uint32_t batch_size = input.m();
 
         // zero the padded values, i.e., the last m_n_to_pad values of each input
         {
-            auto out = output->GetPointer() + m_n_output_dims;
-            const size_t bytes_to_zero = m_n_to_pad * sizeof(T);
-            const int stride = padded_output_width();
+            auto out = output->GetPointer() + this->get_output_width();
+            const size_t bytes_to_zero = this->get_n_to_pad() * sizeof(T);
+            const uint32_t stride = this->get_padded_output_width();
 
             for (int iter = 0; iter < batch_size; iter++) {
-                q->memset(out + iter * stride, 0, bytes_to_zero);
+                this->get_queue().memset(out + iter * stride, 0, bytes_to_zero);
             }
 
-            q->wait();
+            this->get_queue().wait();
         }
 
         // Idea: each block only takes care of _one_ hash level (but may iterate
@@ -618,10 +622,10 @@ class GridEncodingTemplated : public GridEncoding<T> {
             const float loc_max_level = GridEncoding<T>::m_max_level;
             const auto loc_interpolation_type = m_interpolation_type;
             const auto loc_grid_type = m_grid_type;
-            T const *loc_weights = this->params();
+            T const *loc_weights = this->get_params()->data();
             const DeviceMatrixView<float> loc_input_view = input;
             DeviceMatrixView<T> loc_output_view = *output;
-            q->parallel_for(sycl::nd_range<3>(blocks_hashgrid * sycl::range<3>(1, 1, N_THREADS_HASHGRID),
+            this->get_queue().parallel_for(sycl::nd_range<3>(blocks_hashgrid * sycl::range<3>(1, 1, N_THREADS_HASHGRID),
                                               sycl::range<3>(1, 1, N_THREADS_HASHGRID)),
                             [=](sycl::nd_item<3> item) {
                                 kernels::kernel_grid<T, N_POS_DIMS, N_FEATURES_PER_LEVEL, HASH_TYPE>(
@@ -635,7 +639,7 @@ class GridEncodingTemplated : public GridEncoding<T> {
         return nullptr;
     }
 
-    void backward_impl(sycl::queue *const q, const Context &ctx, const DeviceMatrixView<float> input,
+    void backward_impl(const Context &ctx, const DeviceMatrixView<float> input,
                        const DeviceMatrixView<T> dL_doutput, DeviceMatrixView<T> *gradients,
                        DeviceMatrix<float> *dL_dinput = nullptr, bool use_inference_params = false,
                        GradientMode param_gradients_mode = GradientMode::Overwrite) override {
@@ -655,10 +659,10 @@ class GridEncodingTemplated : public GridEncoding<T> {
             grad_t *const grid_gradient = gradients->GetPointer();
 
             if (param_gradients_mode == GradientMode::Overwrite) {
-                q->memset(grid_gradient, 0, this->n_params() * sizeof(grad_t)).wait();
+                this->get_queue().memset(grid_gradient, 0, this->get_n_params() * sizeof(grad_t)).wait();
             }
 
-            q->submit([&](sycl::handler &cgh) {
+            this->get_queue().submit([&](sycl::handler &cgh) {
                 auto loc_n_features = m_n_features;
                 auto loc_offset_table = m_offset_table;
                 auto loc_base_resolution = m_base_resolution;
@@ -696,7 +700,7 @@ class GridEncodingTemplated : public GridEncoding<T> {
             DeviceMatrixView<T> loc_output = dL_doutput;
             DeviceMatrixView<float> loc_dy_dx = forward.dy_dx.GetView();
             DeviceMatrixView<float> loc_input = dL_dinput->GetView();
-            q->parallel_for(
+            this->get_queue().parallel_for(
                 sycl::nd_range<1>(tinydpcppnn::math::next_multiple(batch_size, N_THREADS_HASHGRID), N_THREADS_HASHGRID),
                 [=](sycl::nd_item<1> item) {
                     kernels::kernel_grid_backward_input<T, N_POS_DIMS>(batch_size, loc_n_features, loc_output,
@@ -705,14 +709,14 @@ class GridEncodingTemplated : public GridEncoding<T> {
         }
     }
 
-    void backward_backward_input_impl(sycl::queue *const q, const Context &ctx, const DeviceMatrix<float> &input,
+    void backward_backward_input_impl(const Context &ctx, const DeviceMatrix<float> &input,
                                       const DeviceMatrix<float> &dL_ddLdinput, const DeviceMatrix<T> &dL_doutput,
                                       DeviceMatrix<T> *dL_ddLdoutput = nullptr,
                                       DeviceMatrix<float> *dL_dinput = nullptr, bool use_inference_params = false,
                                       GradientMode param_gradients_mode = GradientMode::Overwrite) {
         const size_t batch_size = input.m();
         if (batch_size == 0) throw std::invalid_argument("batch_size == 0");
-        if (padded_output_width() == 0) throw std::invalid_argument("Padded output width == 0");
+        if (this->padded_output_width() == 0) throw std::invalid_argument("Padded output width == 0");
         if (use_inference_params) throw std::invalid_argument("Cannot use inference params.");
         static_assert(std::is_same<grad_t, T>::value);
 
@@ -725,11 +729,11 @@ class GridEncodingTemplated : public GridEncoding<T> {
             grad_t *const grid_gradient = this->gradients();
 
             if (param_gradients_mode == GradientMode::Overwrite) {
-                q->memset(grid_gradient, 0, this->n_params() * sizeof(grad_t)).wait();
+                this->get_queue().memset(grid_gradient, 0, this->n_params() * sizeof(grad_t)).wait();
             }
 
             // from dL_d(dL_dx) to dL_dgrid
-            q->submit([&](sycl::handler &cgh) {
+            this->get_queue().submit([&](sycl::handler &cgh) {
                 auto loc_n_features = m_n_features;
                 auto loc_offset_table = m_offset_table;
                 auto loc_base_resolution = m_base_resolution;
@@ -762,7 +766,7 @@ class GridEncodingTemplated : public GridEncoding<T> {
             DeviceMatrixView<float> loc_input = dL_ddLdinput.GetView();
             DeviceMatrixView<float> loc_dy_dx = forward.dy_dx.GetView();
             DeviceMatrixView<T> loc_output = dL_ddLdoutput->GetView();
-            q->parallel_for(
+            this->get_queue().parallel_for(
                 sycl::nd_range<1>(tinydpcppnn::math::next_multiple(batch_size, N_THREADS_HASHGRID), N_THREADS_HASHGRID),
                 [=](sycl::nd_item<1> item) {
                     kernels::kernel_grid_backward_input_backward_dLdoutput<T, N_POS_DIMS>(
@@ -772,7 +776,7 @@ class GridEncodingTemplated : public GridEncoding<T> {
 
         if (dL_dinput) {
             // from dL_d(dL_dx) to dL_dx
-            q->submit([&](sycl::handler &cgh) {
+            this->get_queue().submit([&](sycl::handler &cgh) {
                 auto loc_n_features = m_n_features;
                 auto loc_offset_table = m_offset_table;
                 auto loc_base_resolution = m_base_resolution;
@@ -801,32 +805,6 @@ class GridEncodingTemplated : public GridEncoding<T> {
                     });
             });
         }
-    }
-
-    uint32_t input_width() const override { return N_POS_DIMS; }
-
-    uint32_t padded_output_width() const override { return m_n_output_dims + m_n_to_pad; }
-
-    uint32_t output_width() const override { return padded_output_width(); }
-
-    void set_padded_output_width(uint32_t padded_output_width) override {
-        if (padded_output_width < m_n_output_dims) {
-            throw std::invalid_argument(
-                "Padded width has to be larger than unpadded. m_n_output_dims: " + std::to_string(m_n_output_dims) +
-                ", padded_output_width: " + std::to_string(padded_output_width));
-        };
-        m_n_to_pad = padded_output_width - m_n_output_dims;
-    }
-
-    void initialize_params(float *params_full_precision, float scale = 1) override {
-        // // Initialize the hashgrid from the GPU, because the number of parameters
-        // can be quite large. generate_random_uniform<float>(rnd, this->n_params(),
-        // params_full_precision, -1e-4f * scale, 1e-4f * scale);
-
-        constexpr std::uint64_t seed = 777;
-        oneapi::mkl::rng::philox4x32x10 engine(dpct::get_default_queue(), seed); //this cannot work correctly since we use a different queue.
-        oneapi::mkl::rng::uniform<float> distribution(-1e-4f * scale, 1e-4f * scale);
-        oneapi::mkl::rng::generate(distribution, engine, this->n_params(), params_full_precision).wait();
     }
 
     size_t level_n_params(uint32_t level) const override {
@@ -885,10 +863,6 @@ class GridEncodingTemplated : public GridEncoding<T> {
 
     uint32_t m_n_dims_to_pass_through;
 
-    // derived sizes
-    uint32_t m_n_output_dims;
-    uint32_t m_n_to_pad = 0;
-
     float m_per_level_scale;
 
     // uint32_t this->m_n_params;
@@ -898,7 +872,10 @@ class GridEncodingTemplated : public GridEncoding<T> {
 };
 
 template <typename T, uint32_t N_FEATURES_PER_LEVEL, HashType HASH_TYPE>
-std::shared_ptr<GridEncoding<T>> create_grid_encoding_templated_2(const json &encoding) {
+std::shared_ptr<GridEncoding<T>> create_grid_encoding_templated_2(const json &encoding, 
+    std::optional<uint32_t> padded_output_width, sycl::queue& Q) 
+{
+
     const uint32_t log2_hashmap_size = encoding.value(EncodingParams::LOG2_HASHMAP_SIZE, 19u);
     const uint32_t n_dims_to_encode = encoding.value(EncodingParams::N_DIMS_TO_ENCODE, 2u);
 
@@ -919,13 +896,14 @@ std::shared_ptr<GridEncoding<T>> create_grid_encoding_templated_2(const json &en
     const uint32_t base_resolution = encoding.value(EncodingParams::BASE_RESOLUTION, 16u);
 
 #define TCNN_GRID_PARAMS                                                                                               \
+    padded_output_width.has_value() ? padded_output_width.value() : n_features,                                        \
     n_features, log2_hashmap_size, base_resolution,                                                                    \
         encoding.value(EncodingParams::PER_LEVEL_SCALE,                                                                \
                        grid_type == GridType::Dense                                                                    \
                            ? std::exp(std::log(256.0f / (float)base_resolution) / (n_levels - 1))                      \
                            : 2.0f),                                                                                    \
         encoding.value(EncodingParams::USE_STOCHASTIC_INTERPOLATION, false),                                           \
-        encoding.value(EncodingParams::INTERPOLATION_METHOD, InterpolationType::Linear), grid_type
+        encoding.value(EncodingParams::INTERPOLATION_METHOD, InterpolationType::Linear), grid_type, Q
 
     // If higher-dimensional hash encodings are desired, corresponding switch
     // cases can be added
@@ -941,34 +919,38 @@ std::shared_ptr<GridEncoding<T>> create_grid_encoding_templated_2(const json &en
 }
 
 template <typename T, HashType HASH_TYPE>
-std::shared_ptr<GridEncoding<T>> create_grid_encoding_templated_1(const json &encoding_config) {
+std::shared_ptr<GridEncoding<T>> create_grid_encoding_templated_1(const json &encoding_config, 
+    std::optional<uint32_t> padded_output_width, sycl::queue& Q) 
+{
     const uint32_t n_features_per_level = encoding_config.value(EncodingParams::N_FEATURES_PER_LEVEL, 2u);
     switch (n_features_per_level) {
     case 1:
-        return create_grid_encoding_templated_2<T, 1, HASH_TYPE>(encoding_config);
+        return create_grid_encoding_templated_2<T, 1, HASH_TYPE>(encoding_config, padded_output_width, Q);
     case 2:
-        return create_grid_encoding_templated_2<T, 2, HASH_TYPE>(encoding_config);
+        return create_grid_encoding_templated_2<T, 2, HASH_TYPE>(encoding_config, padded_output_width, Q);
     case 4:
-        return create_grid_encoding_templated_2<T, 4, HASH_TYPE>(encoding_config);
+        return create_grid_encoding_templated_2<T, 4, HASH_TYPE>(encoding_config, padded_output_width, Q);
     case 8:
-        return create_grid_encoding_templated_2<T, 8, HASH_TYPE>(encoding_config);
+        return create_grid_encoding_templated_2<T, 8, HASH_TYPE>(encoding_config, padded_output_width, Q);
     default:
         throw std::runtime_error{"GridEncoding: n_features_per_level must be 1, 2, 4, or 8."};
     }
 }
 
-template <typename T> std::shared_ptr<GridEncoding<T>> create_grid_encoding(const json &encoding_config) {
+template <typename T> std::shared_ptr<GridEncoding<T>> create_grid_encoding(const json &encoding_config, 
+    std::optional<uint32_t> padded_output_width, sycl::queue& Q) 
+{
     const HashType hash_type = encoding_config.value(EncodingParams::HASH, HashType::CoherentPrime);
 
     switch (hash_type) {
     case HashType::Prime:
-        return create_grid_encoding_templated_1<T, HashType::Prime>(encoding_config);
+        return create_grid_encoding_templated_1<T, HashType::Prime>(encoding_config, padded_output_width, Q);
     case HashType::CoherentPrime:
-        return create_grid_encoding_templated_1<T, HashType::CoherentPrime>(encoding_config);
+        return create_grid_encoding_templated_1<T, HashType::CoherentPrime>(encoding_config, padded_output_width, Q);
     case HashType::ReversedPrime:
-        return create_grid_encoding_templated_1<T, HashType::ReversedPrime>(encoding_config);
+        return create_grid_encoding_templated_1<T, HashType::ReversedPrime>(encoding_config, padded_output_width, Q);
     case HashType::Rng:
-        return create_grid_encoding_templated_1<T, HashType::Rng>(encoding_config);
+        return create_grid_encoding_templated_1<T, HashType::Rng>(encoding_config, padded_output_width, Q);
     default:
         throw std::runtime_error{"GridEncoding: invalid hash type."};
     }

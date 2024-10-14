@@ -96,62 +96,6 @@ extern SYCL_EXTERNAL unsigned fromPackedLayoutCoord(const unsigned idx, const un
  */
 extern SYCL_EXTERNAL bool isequalstring(const std::string &str1, const std::string &str2);
 
-namespace tinydpcppnn {
-template <typename T> void format_helper(std::ostringstream &os, std::string_view &str, const T &val) {
-    std::size_t bracket = str.find('{');
-    if (bracket != std::string::npos) {
-        std::size_t bracket_close = str.find('}', bracket + 1);
-        if (bracket_close != std::string::npos) {
-            os << str.substr(0, bracket) << val;
-            str = str.substr(bracket_close + 1);
-        } else
-            throw std::invalid_argument("No closing bracket\n");
-    } else
-        throw std::invalid_argument("Not enough brackets for arguments\n");
-};
-
-template <typename... T> std::string format(std::string_view str, T... vals) {
-    std::ostringstream os;
-    (format_helper(os, str, vals), ...);
-    os << str;
-    return os.str();
-}
-} // namespace tinydpcppnn
-
-enum class LogSeverity {
-    Info,
-    Debug,
-    Warning,
-    Error,
-    Success,
-};
-
-const std::function<void(LogSeverity, const std::string &)> &log_callback();
-void set_log_callback(const std::function<void(LogSeverity, const std::string &)> &callback);
-
-template <typename... Ts> void log(LogSeverity severity, const std::string &msg, Ts &&...args) {
-    log_callback()(severity, tinydpcppnn::format(msg, std::forward<Ts>(args)...)); // removed fmt, find something else
-}
-
-template <typename... Ts> void log_info(const std::string &msg, Ts &&...args) {
-    log(LogSeverity::Info, msg, std::forward<Ts>(args)...);
-}
-template <typename... Ts> void log_debug(const std::string &msg, Ts &&...args) {
-    log(LogSeverity::Debug, msg, std::forward<Ts>(args)...);
-}
-template <typename... Ts> void log_warning(const std::string &msg, Ts &&...args) {
-    log(LogSeverity::Warning, msg, std::forward<Ts>(args)...);
-}
-template <typename... Ts> void log_error(const std::string &msg, Ts &&...args) {
-    log(LogSeverity::Error, msg, std::forward<Ts>(args)...);
-}
-template <typename... Ts> void log_success(const std::string &msg, Ts &&...args) {
-    log(LogSeverity::Success, msg, std::forward<Ts>(args)...);
-}
-
-bool verbose();
-void set_verbose(bool verbose);
-
 Activation string_to_activation(const std::string &activation_name);
 std::string to_string(Activation activation);
 

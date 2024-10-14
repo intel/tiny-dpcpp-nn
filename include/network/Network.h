@@ -119,7 +119,7 @@ template <typename T> class Network : public NetworkBase<T> {
     virtual uint32_t get_input_width() const { return input_width_; }
     virtual uint32_t get_output_width() const { return output_width_; }
     virtual uint32_t get_unpadded_output_width() const { return original_output_width_; }
-    virtual uint32_t get_inpadded_output_width() const { return original_input_width_; }
+    virtual uint32_t get_unpadded_input_width() const { return original_input_width_; }
 
   private:
     virtual void SanityCheck() const {

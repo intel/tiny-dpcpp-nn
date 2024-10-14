@@ -25,24 +25,17 @@ double benchmark_encoding(const size_t batch_size, const size_t input_width, con
 
     // need a factory here for different widths
     std::cout << "Creating encoding" << std::endl;
-    auto encoding = create_encoding<T>(config);
-    DeviceMatrix<T> params_full_precision(encoding->n_params(), 1, q);
-    encoding->set_params(params_full_precision);
-
-    
-    encoding->set_padded_output_width(output_width);
-
-
+    auto encoding = create_encoding<T>(config, q, output_width);
 
     auto output_view = output.GetView();
     std::cout << "Warmup" << std::endl;
-    encoding->forward_impl(&q, inputs.GetView(), &output_view);
+    encoding->forward_impl(inputs.GetView(), &output_view);
     q.wait();
 
     std::cout << "Starting Iter" << std::endl;
     const auto begin_time = std::chrono::steady_clock::now();
     for (int iter = 0; iter < n_iterations; iter++) {
-        encoding->forward_impl(&q, inputs.GetView(), &output_view);
+        encoding->forward_impl(inputs.GetView(), &output_view);
         q.wait();
     }
     const auto end_time = std::chrono::steady_clock::now();

@@ -80,26 +80,23 @@ void test_encoding_training_from_loaded_file(const int batch_size, const int inp
     json config = io::loadJsonConfig(filepath + "/encoding_config.json");
     config[EncodingParams::N_DIMS_TO_ENCODE] = input_width;
 
-    std::shared_ptr<Encoding<T>> encoding = create_encoding<T>(config);
-    encoding->set_padded_output_width(output_width);
+    std::shared_ptr<Encoding<T>> encoding = create_encoding<T>(config, output_width, q);
 
     std::vector<T> params = io::loadVectorFromCSV<T>(filepath + "encoding_params.csv");
     std::vector<float> input_ref = io::loadVectorFromCSV<float>(filepath + "input_encoding.csv");
     std::vector<T> output_ref = io::loadVectorFromCSV<T>(filepath + "output_encoding.csv");
 
-    if (!encoding->n_params()) {
+    if (!encoding->get_n_params()) {
         throw std::runtime_error(
             "n_params is 0, DeviceMem cannot be created with size 0 and for training, we require params to be trained");
     }
-    DeviceMatrix<T> gradients(encoding->n_params(), 1, q);
+    DeviceMatrix<T> gradients(encoding->get_n_params(), 1, q);
     gradients.fill(0.0).wait();
     auto gradients_view = gradients.GetView();
 
-    DeviceMatrix<T> params_full_precision(params.size(), 1, q);
-    params_full_precision.fill(0.0).wait();
 
     // for grid encoding this is true
-    encoding->set_params(params_full_precision, &params);
+    encoding->get_params()->copy_from_host(params);
 
     CHECK(input_ref.size() == input.size());
     CHECK(output_ref.size() == output.size());
@@ -124,10 +121,10 @@ void test_encoding_training_from_loaded_file(const int batch_size, const int inp
     encoding->backward_impl(&q, *model_ctx, input_view, dL_doutput_view, &gradients_view);
     q.wait();
 
-    std::vector<float> enc_params(encoding->n_params());
+    std::vector<float> enc_params(encoding->get_n_params());
     std::vector<float> enc_grads = gradients.copy_to_host();
 
-    q.memcpy(enc_params.data(), encoding->params(), encoding->n_params() * sizeof(float)).wait();
+    q.memcpy(enc_params.data(), encoding->get_params(), encoding->get_n_params() * sizeof(float)).wait();
     // pure sanity check that params didn't change, we loaded them and set them
 
     float epsilon = 1e-2;
@@ -156,9 +153,8 @@ TEST_CASE("tinydpcppnn::encoding Identity") {
                                    {EncodingParams::SCALE, 1.0},
                                    {EncodingParams::OFFSET, 0.0},
                                    {EncodingParams::ENCODING, EncodingNames::IDENTITY}};
-        std::shared_ptr<Encoding<float>> network = create_encoding<float>(encoding_config);
-        network->set_padded_output_width(output_width);
-        std::unique_ptr<Context> model_ctx = network->forward_impl(&q, input.GetView(), &output_view);
+        std::shared_ptr<Encoding<float>> network = create_encoding<float>(encoding_config, q, output_width);
+        std::unique_ptr<Context> model_ctx = network->forward_impl(input.GetView(), &output_view);
         q.wait();
 
         std::vector<float> in = input.copy_to_host();
@@ -217,9 +213,8 @@ TEST_CASE("tinydpcppnn::encoding Spherical Harmonics") {
         const json encoding_config{{EncodingParams::N_DIMS_TO_ENCODE, input_width},
                                    {EncodingParams::DEGREE, DEGREE},
                                    {EncodingParams::ENCODING, EncodingNames::SPHERICALHARMONICS}};
-        std::shared_ptr<Encoding<float>> network = create_encoding<float>(encoding_config);
-        network->set_padded_output_width(output_float.n());
-        std::unique_ptr<Context> model_ctx = network->forward_impl(&q, input.GetView(), &output_view);
+        std::shared_ptr<Encoding<float>> network = create_encoding<float>(encoding_config, q, output_width);
+        std::unique_ptr<Context> model_ctx = network->forward_impl(input.GetView(), &output_view);
         q.wait();
 
         std::vector<float> out = output_float.copy_to_host();
@@ -268,17 +263,16 @@ TEST_CASE("tinydpcppnn::encoding Grid Encoding") {
             {EncodingParams::BASE_RESOLUTION, 16},           {EncodingParams::PER_LEVEL_SCALE, 2.0}};
 
         std::shared_ptr<GridEncoding<float>> network =
-            tinydpcppnn::encodings::grid::create_grid_encoding<float>(encoding_config);
+            tinydpcppnn::encodings::grid::create_grid_encoding<float>(encoding_config, padded_output_width, q);
         q.wait();
-        network->set_padded_output_width(output_float.n());
 
-        std::vector<float> tmp_params_host(network->n_params(), 1.0f);
+        CHECK(network->get_n_params() > 0);
+        std::vector<float> tmp_params_host(network->get_n_params(), 1.0f);
         initialize_arange(tmp_params_host);
-        DeviceMatrix<float> params_full_precision(network->n_params(), 1, q);
 
-        network->set_params(params_full_precision, &tmp_params_host);
+        network->get_params()->copy_from_host(tmp_params_host);
 
-        std::unique_ptr<Context> model_ctx = network->forward_impl(&q, input_view, &output_view);
+        std::unique_ptr<Context> model_ctx = network->forward_impl(input_view, &output_view);
         q.wait();
 
         const std::vector<float> out = output_float.copy_to_host();
@@ -310,18 +304,14 @@ TEST_CASE("tinydpcppnn::encoding Grid Encoding") {
             {EncodingParams::BASE_RESOLUTION, 16},           {EncodingParams::PER_LEVEL_SCALE, 2.0}};
 
         std::shared_ptr<GridEncoding<float>> encoding =
-            tinydpcppnn::encodings::grid::create_grid_encoding<float>(encoding_config);
+            tinydpcppnn::encodings::grid::create_grid_encoding<float>(encoding_config, padded_output_width, q);
         q.wait();
-        encoding->set_padded_output_width(output_float.n());
 
-        DeviceMatrix<float> params_full_precision(encoding->n_params(), 1, q);
-        params_full_precision.fill(1.0f).wait();
-        DeviceMatrix<float> gradients(encoding->n_params(), 1, q);
+        DeviceMatrix<float> gradients(encoding->get_n_params(), 1, q);
         gradients.fill(0.123f).wait(); // fill with something to check if it is written to
         auto gradients_view = gradients.GetView();
 
-        auto params_value = params_full_precision.copy_to_host();
-        encoding->set_params(params_full_precision, &params_value);
+        encoding->get_params()->fill(1.0f).wait();
 
         std::unique_ptr<Context> model_ctx = nullptr;
         DeviceMatrix<float> dL_doutput(batch_size, padded_output_width, q);
@@ -329,11 +319,11 @@ TEST_CASE("tinydpcppnn::encoding Grid Encoding") {
         auto input_view = input.GetView();
         auto dL_doutput_view = dL_doutput.GetView();
 
-        encoding->backward_impl(&q, *model_ctx, input_view, dL_doutput_view, &gradients_view);
+        encoding->backward_impl(*model_ctx, input_view, dL_doutput_view, &gradients_view);
         q.wait();
 
         CHECK(isVectorWithinTolerance(gradients.copy_to_host(), 0.0f, 1e-3));
-        CHECK(isVectorWithinTolerance(params_full_precision.copy_to_host(), 1.0f, 1e-3));
+        CHECK(isVectorWithinTolerance(encoding->get_params()->copy_to_host(), 1.0f, 1e-3));
     }
 
 #ifdef TEST_PATH
@@ -391,12 +381,6 @@ TEST_CASE("tinydpcppnn::encoding bad configs") {
         const int output_width = 3;
 
         sycl::queue q;
-        DeviceMatrix<float> input(batch_size, input_width, q);
-        input.fill(1.23f).wait();
-
-        DeviceMatrix<float> output_float(batch_size, output_width, q);
-        output_float.fill(0.0f).wait();
-        auto output_view = output_float.GetView();
 
         // Define the parameters for creating IdentityEncoding
         const json encoding_config{{EncodingParams::N_DIMS_TO_ENCODE, input_width},
@@ -404,6 +388,6 @@ TEST_CASE("tinydpcppnn::encoding bad configs") {
                                    {EncodingParams::OFFSET, 0.0},
                                    {EncodingParams::ENCODING, EncodingNames::IDENTITY},
                                    {"Bad string", 1.0}};
-        CHECK_NOTHROW(create_encoding<float>(encoding_config));
+        CHECK_NOTHROW(create_encoding<float>(encoding_config, q, output_width));
     }
 }

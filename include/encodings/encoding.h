@@ -80,84 +80,76 @@ enum class ReductionType {
     Product,
 };
 
-// Type trait to detect bf16 type
-template <typename T> struct is_bf16 : std::false_type {};
-
-// Specialization for actual bf16 type, if bf16 type is available
-template <> struct is_bf16<sycl::ext::oneapi::bfloat16> : std::true_type {};
-
 template <typename T> class Encoding {
   public:
-    Encoding() : m_n_params(0) {}
+    Encoding() = delete;
+    Encoding(const uint32_t input_width, const uint32_t output_width, const uint32_t padded_output_width, sycl::queue& Q) :
+        m_params(nullptr), m_input_width(input_width), m_output_width(output_width), 
+        m_padded_output_width(padded_output_width), m_q(Q) {
+            if (m_input_width == 0) throw std::invalid_argument("Input width cannot be zero");
+            if (m_output_width == 0) throw std::invalid_argument("Output width cannot be zero");
+            if (m_padded_output_width < m_output_width) throw std::invalid_argument("Padded output width cannot be less than output width");
+        }
     virtual ~Encoding() {}
 
-    virtual std::unique_ptr<Context> forward_impl(sycl::queue *const q, const DeviceMatrixView<float> input,
+    virtual std::unique_ptr<Context> forward_impl(const DeviceMatrixView<float> input,
                                                   DeviceMatrixView<T> *output = nullptr,
                                                   bool use_inference_params = false,
                                                   bool prepare_input_gradients = false) = 0;
 
-    virtual void backward_impl(sycl::queue *const q, const Context &ctx, const DeviceMatrixView<float> input,
+    virtual void backward_impl(const Context &ctx, const DeviceMatrixView<float> input,
                                const DeviceMatrixView<T> dL_doutput, DeviceMatrixView<T> *gradients = nullptr,
                                DeviceMatrix<float> *dL_dinput = nullptr, bool use_inference_params = false,
                                GradientMode param_gradients_mode = GradientMode::Overwrite) = 0;
 
-    virtual void set_padded_output_width(uint32_t padded_output_width) = 0;
+    // virtual void set_padded_output_width(uint32_t padded_output_width) = 0;
 
-    virtual void initialize_params(float *params_full_precision, float scale = 1) = 0;
+    
+    // TODO: should be inherited from object.h at some point
+    // Get the params of the encoding. Use this to initialize them to values.
+    std::shared_ptr<DeviceMatrix<T> > get_params() const { return m_params; }
 
-    virtual uint32_t input_width() const = 0;
+    //get the input width
+    uint32_t get_input_width() const {return m_input_width;}
 
-    virtual uint32_t padded_output_width() const = 0;
+    //get the padded output width. This is in general a power of 2
+    uint32_t get_padded_output_width() const {return m_padded_output_width;}
 
-    virtual uint32_t output_width() const = 0;
+    ///get the not-padded output width. This may or may not be the same as the padded width
+    uint32_t get_output_width() const {return m_output_width;}
 
-    // TODO: Remove; should be inherited from object.h at some point
-    // These are the weights
-    T *params() const { return m_params->GetView().GetPointer(); }
+    uint32_t get_n_to_pad() const {return m_padded_output_width - m_output_width;}
 
-    T *inference_params() const { return m_inference_params->GetView().GetPointer(); }
+    size_t get_n_params() const { return m_params ? m_params->size() : 0; }
 
-    size_t n_params() const { return m_n_params; }
+    sycl::queue& get_queue() { return m_q; }
 
-    void set_params(std::vector<T> params) {
-        if (m_params == nullptr || m_inference_params == nullptr) {
-            throw std::runtime_error("m_params or m_inference_params is nullptr");
-        } else {
-            m_params->copy_from_host(params).wait();
-        }
-    }
+    // ///Function which takes a pointer to a DeviceMatrix and assigns it to the m_params
+    // ///Throws an error if the input pointer is a nullptr or if the sizes do not match with m_n_params
+    // void set_params(DeviceMatrix<T> * const params_full_precision) {
 
-    void set_params(DeviceMatrix<T> &params_full_precision, std::vector<T> *params = nullptr) {
+    //     static_assert(std::is_same<T, float>::value, "Only float are supported");
 
-        if constexpr (!is_bf16<T>::value) {
-            m_params = &params_full_precision;
-            m_inference_params = &params_full_precision;
-            if (params == nullptr) {
-                initialize_params(params_full_precision.GetView().GetPointer());
-            } else {
+    //     if (!params_full_precision) throw std::invalid_argument("Cannot set params with a nullptr");
+    //     if (params_full_precision->size() != n_params()) throw std::invalid_argument("Parameter size mismatch");
 
-                if (params->size() != this->n_params()) {
-                    std::string error_message = "Parameter size mismatch: expected " + std::to_string(params->size()) +
-                                                ", got " + std::to_string(this->n_params()) + ".";
-                    throw std::runtime_error(error_message);
-                }
-                set_params(*params);
-            }
-        } else {
-            throw std::invalid_argument("Bf16 params not supported yet");
-        }
-    }
-
-  private:
-    DeviceMatrix<T> *m_params = nullptr;
-    DeviceMatrix<T> *m_inference_params = nullptr;
-
-    struct ForwardContext : public Context {
-        DeviceMatrix<T> network_input;
-        std::unique_ptr<Context> encoding_ctx;
-        std::unique_ptr<Context> network_ctx;
-    };
+    //     m_params = params_full_precision;
+    // }
 
   protected:
-    uint32_t m_n_params;
+    ///Parameters or Weights. They are owned by this encoding.
+    std::shared_ptr<DeviceMatrix<T> > m_params;
+
+    //Not used
+    // struct ForwardContext : public Context {
+    //     DeviceMatrix<T> network_input;
+    //     std::unique_ptr<Context> encoding_ctx;
+    //     std::unique_ptr<Context> network_ctx;
+    // };
+
+    const uint32_t m_input_width;
+    const uint32_t m_output_width;
+    const uint32_t m_padded_output_width;
+
+    sycl::queue& m_q;
 };

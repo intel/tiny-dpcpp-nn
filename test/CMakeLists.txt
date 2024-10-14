@@ -32,6 +32,7 @@ endif()
 
 add_library(test-lib STATIC main.cpp)
 target_include_directories(test-lib PUBLIC ${PROJECT_SOURCE_DIR}/extern/)
+target_include_directories(test-lib PUBLIC ${PROJECT_SOURCE_DIR}/include/)
 target_compile_features(test-lib PUBLIC cxx_std_20)
 add_common_flags(test-lib)
 
