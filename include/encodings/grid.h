@@ -593,17 +593,19 @@ class GridEncodingTemplated : public GridEncoding<T> {
 
         const uint32_t batch_size = input.m();
 
+        sycl::event e;
         // zero the padded values, i.e., the last m_n_to_pad values of each input
         {
-            auto out = output->GetPointer() + this->get_output_width();
-            const size_t bytes_to_zero = this->get_n_to_pad() * sizeof(T);
+            auto out = output->GetPointer();
+            const int n_to_pad = this->get_n_to_pad();
             const uint32_t stride = this->get_padded_output_width();
 
-            for (int iter = 0; iter < batch_size; iter++) {
-                this->get_queue().memset(out + iter * stride, 0, bytes_to_zero);
-            }
-
-            this->get_queue().wait();
+            e = this->get_queue().parallel_for(sycl::range<1>(batch_size*n_to_pad), [=](sycl::id<1> idx) {
+                
+                const size_t row = idx[0] / n_to_pad;
+                const size_t col = idx[0] % n_to_pad + stride - n_to_pad;
+                out[row * stride + col] = (T)0;
+            });
         }
 
         // Idea: each block only takes care of _one_ hash level (but may iterate
@@ -626,7 +628,7 @@ class GridEncodingTemplated : public GridEncoding<T> {
             const DeviceMatrixView<float> loc_input_view = input;
             DeviceMatrixView<T> loc_output_view = *output;
             this->get_queue().parallel_for(sycl::nd_range<3>(blocks_hashgrid * sycl::range<3>(1, 1, N_THREADS_HASHGRID),
-                                              sycl::range<3>(1, 1, N_THREADS_HASHGRID)),
+                                              sycl::range<3>(1, 1, N_THREADS_HASHGRID)), e,
                             [=](sycl::nd_item<3> item) {
                                 kernels::kernel_grid<T, N_POS_DIMS, N_FEATURES_PER_LEVEL, HASH_TYPE>(
                                     batch_size, loc_n_features, loc_offset_table, loc_base_resolution,

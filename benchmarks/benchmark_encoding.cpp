@@ -24,7 +24,7 @@ int main()
             {EncodingParams::INTERPOLATION_METHOD, InterpolationType::Smoothstep}, 
             {EncodingParams::GRID_TYPE, GridType::Hash}, 
             {EncodingParams::N_DIMS_TO_ENCODE, 3}};
-        benchmark_encoding<float, 32>(1 << 20, 3, 10, config, q);
+        benchmark_encoding<float, 32>(1 << 20, 3, 1000, config, q);
         q.wait();
 
     } catch (const std::exception &e) {
