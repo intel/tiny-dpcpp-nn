@@ -18,7 +18,6 @@ option(BUILD_TORCH_TEST "Build tests that use torch interface (tnn_api.h) in 'te
 option(BUILD_PYBIND "Build pybindings in 'dpcpp_bindings' directory" OFF)
 option(BUILD_TORCH_BENCHMARK "Build benchmarks that use torch interface (tnn_api.h) in 'benchmark' directory" OFF)
 option(BUILD_BENCHMARK "Build benchmarks in 'benchmark' directory" ON)
-option(BUILD_REF_TEST "Use reference tests from downloaded data for test" OFF)
 option(BUILD_DOCUMENTATION "Build the documentation which is online available" OFF)
 option(BUILD_EXAMPLE "Build the examples" OFF)
 

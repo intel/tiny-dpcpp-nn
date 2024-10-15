@@ -3,7 +3,7 @@ import pytest
 import intel_extension_for_pytorch
 from torch.utils.data import DataLoader, TensorDataset
 from src.utils import create_models
-from tiny_dpcpp_nn import Network, Encoding, NetworkWithInputEncoding
+from tiny_dpcpp_nn import Network, Encoding
 
 torch.set_printoptions(precision=10)
 
@@ -364,45 +364,28 @@ def run_test_network_with_custom_encoding(
     num_samples,
     learning_rate,
     epochs,
-    separate,
     optimiser,
 ):
-    if separate:
-        encoding = Encoding(
-            n_input_dims=input_size,
-            encoding_config=encoding_config,
-            device="xpu",
-            input_dtype=torch.float,
-            backend_param_dtype=torch.float,
-        )
-        network = Network(
-            n_input_dims=encoding.n_output_dims,
-            n_output_dims=output_size,
-            network_config={
-                "activation": "relu",
-                "output_activation": "linear",
-                "n_neurons": hidden_size,
-                "n_hidden_layers": hidden_layers,
-            },
-            input_dtype=dtype,
-            backend_param_dtype=dtype,
-        )
-        nwe = torch.nn.Sequential(encoding, network).to("xpu")
-    else:
-        nwe = NetworkWithInputEncoding(
-            n_input_dims=input_size,
-            n_output_dims=output_size,
-            network_config={
-                "activation": "relu",
-                "output_activation": "linear",
-                "n_neurons": hidden_size,
-                "n_hidden_layers": hidden_layers,
-            },
-            encoding_config=encoding_config,
-            device="xpu",
-            input_dtype=torch.float,
-            backend_param_dtype=dtype,
-        )
+    encoding = Encoding(
+        n_input_dims=input_size,
+        encoding_config=encoding_config,
+        device="xpu",
+        input_dtype=torch.float,
+        backend_param_dtype=torch.float,
+    )
+    network = Network(
+        n_input_dims=encoding.n_output_dims,
+        n_output_dims=output_size,
+        network_config={
+            "activation": "relu",
+            "output_activation": "linear",
+            "n_neurons": hidden_size,
+            "n_hidden_layers": hidden_layers,
+        },
+        input_dtype=dtype,
+        backend_param_dtype=dtype,
+    )
+    nwe = torch.nn.Sequential(encoding, network).to("xpu")
     # Generate dummy data
     X, y = generate_data(num_samples, input_size, output_size)
 
@@ -463,37 +446,21 @@ def test_network_with_encoding_all(dtype):
 
     print("Testing identity separate")
     run_test_network_with_custom_encoding(
-        identity_config, dtype, separate=True, optimiser=optimiser, **hyper_parameters
+        identity_config, dtype,  optimiser=optimiser, **hyper_parameters
     )
 
     print("Testing spherical separate")
     run_test_network_with_custom_encoding(
         spherical_harmonics_config,
         dtype,
-        separate=True,
         optimiser=optimiser,
         **hyper_parameters,
     )
 
     print("Testing grid separate")
     run_test_network_with_custom_encoding(
-        grid_config, dtype, separate=True, optimiser=optimiser, **hyper_parameters
+        grid_config, dtype,  optimiser=optimiser, **hyper_parameters
     )
-
-    # print("Testing identity nwe")
-    # run_test_network_with_custom_encoding(
-    #     identity_config, dtype, separate=False, optimiser=optimiser,**hyper_parameters
-    # )
-
-    # print("Testing spherical nwe")
-    # run_test_network_with_custom_encoding(
-    #     spherical_harmonics_config, dtype, separate=False,optimiser=optimiser, **hyper_parameters
-    # )
-
-    # print("Testing grid nwe")
-    # run_test_network_with_custom_encoding(
-    #     grid_config, dtype, separate=False, optimiser=optimiser,**hyper_parameters
-    # )
 
 
 if __name__ == "__main__":

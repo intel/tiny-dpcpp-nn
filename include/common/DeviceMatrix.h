@@ -20,6 +20,8 @@
 #include <sycl/sycl.hpp>
 #include <vector>
 
+#include "oneapi/mkl/rng.hpp"
+
 enum class MatrixLayout { RowMajor = 0, ColumnMajor = 1 };
 
 /**
@@ -119,7 +121,7 @@ template <typename T, MatrixLayout _layout = MatrixLayout::RowMajor> class Devic
   public:
     // Owning its memory as an allocation from a stream's memory arena
     DeviceMatrix(const size_t m, const size_t n, sycl::queue &stream)
-        : m_rows(m), m_cols(n), m_q(stream), m_data(sycl::malloc_device<T>(m * n, stream)) {
+        : m_rows(m), m_cols(n), m_q(stream), m_data(sycl::malloc_device<T>(m * n, m_q)) {
         static_assert(_layout != MatrixLayout::ColumnMajor);
     }
     DeviceMatrix() = delete;
@@ -164,49 +166,15 @@ template <typename T, MatrixLayout _layout = MatrixLayout::RowMajor> class Devic
 
     sycl::event fill(const T val) { return m_q.fill(data(), val, n_elements()); }
 
-    void fillSubmatrixWithValue(size_t start_row, size_t start_col, size_t submatrix_rows, size_t submatrix_cols,
-                                T fill_value) {
-        // Error checking to make sure submatrix is within bounds
-        if (start_row + submatrix_rows > m_rows || start_col + submatrix_cols > m_cols) {
-            throw std::invalid_argument("Submatrix dimensions exceed matrix bounds.");
-        }
+    sycl::event fill_random(const T lower_bound, const T upper_bound) {
+        // Initialize with random values
+        // generate_random_uniform<float>(rnd, this->n_params(),
+        // params_full_precision, -1e-4f * scale, 1e-4f * scale);
 
-        T *data_ptr = this->data();
-        size_t global_width = this->cols();
-
-        // Use a kernel to fill the submatrix with the specified value
-        m_q.parallel_for(sycl::range<1>{submatrix_rows * submatrix_cols},
-                         [=](sycl::id<1> idx) {
-                             size_t i = idx[0] / submatrix_cols; // Row index within submatrix
-                             size_t j = idx[0] % submatrix_cols; // Column index within submatrix
-
-                             // Calculate actual index in the overall matrix
-                             size_t global_idx = (start_row + i) * global_width + (start_col + j);
-
-                             // Assign the fill_value to the submatrix element
-                             data_ptr[global_idx] = fill_value;
-                         })
-            .wait(); // Synchronize operations
-    }
-
-    void copyHostToSubmatrix(const std::vector<T> &srcHostVector, size_t start_row, size_t start_col, size_t rows,
-                             size_t cols) {
-        if (start_row + rows > m_rows || start_col + cols > m_cols) {
-            throw std::invalid_argument("Submatrix dimensions exceed the bounds of the destination matrix.");
-        }
-        if (srcHostVector.size() < rows * cols) {
-            throw std::invalid_argument("Source host vector size is too small for the specified submatrix dimensions.");
-        }
-
-        // Perform the copy in chunks corresponding to each row of the submatrix
-        for (size_t row = 0; row < rows; ++row) {
-            // Compute the offset into the source and destination data
-            size_t srcOffset = row * cols;
-            size_t dstOffset = (start_row + row) * m_cols + start_col;
-
-            // Enqueue a copy operation for the current row
-            m_q.memcpy(m_data + dstOffset, srcHostVector.data() + srcOffset, cols * sizeof(T)).wait();
-        }
+        constexpr std::uint64_t seed = 777;
+        oneapi::mkl::rng::philox4x32x10 engine(m_q, seed); //this cannot work correctly since we use a different queue.
+        oneapi::mkl::rng::uniform<T> distribution(lower_bound, upper_bound);
+        return oneapi::mkl::rng::generate(distribution, engine, size(), m_data);
     }
 
     sycl::event copy_to_host(std::vector<T> &out) const {

@@ -25,13 +25,16 @@
 template <typename T> class EncodingFactory {
   public:
     virtual ~EncodingFactory() {}
-    virtual std::shared_ptr<Encoding<T>> create(const json &config) const = 0;
+    virtual std::shared_ptr<Encoding<T>> create(const json &config, 
+        std::optional<uint32_t> padded_output_width, sycl::queue& Q) const = 0;
 };
 
 // EncodingFactory for IdentityEncoding
 template <typename T> class IdentityEncodingFactory : public EncodingFactory<T> {
   public:
-    std::shared_ptr<Encoding<T>> create(const json &config) const override {
+    std::shared_ptr<Encoding<T>> create(const json &config, 
+        std::optional<uint32_t> padded_output_width, sycl::queue& Q) const override 
+    {
 
         if (!config.contains(EncodingParams::OFFSET))
             throw std::invalid_argument("Config misses " + EncodingParams::OFFSET);
@@ -43,14 +46,17 @@ template <typename T> class IdentityEncodingFactory : public EncodingFactory<T> 
         const uint32_t n_dims_to_encode = config[EncodingParams::N_DIMS_TO_ENCODE];
         const float scale = config[EncodingParams::SCALE];
         const float offset = config[EncodingParams::OFFSET];
-        return std::make_shared<IdentityEncoding<T>>(n_dims_to_encode, scale, offset);
+        return std::make_shared<IdentityEncoding<T>>(n_dims_to_encode, 
+            padded_output_width.has_value() ? padded_output_width.value() : n_dims_to_encode, scale, offset, Q);
     }
 };
 
 // EncodingFactory for SphericalHarmonicsEncoding
 template <typename T> class SphericalHarmonicsEncodingFactory : public EncodingFactory<T> {
   public:
-    std::shared_ptr<Encoding<T>> create(const json &config) const override {
+    std::shared_ptr<Encoding<T>> create(const json &config, 
+        std::optional<uint32_t> padded_output_width, sycl::queue& Q) const override 
+    {
 
         if (!config.contains(EncodingParams::DEGREE))
             throw std::invalid_argument("Config misses " + EncodingParams::DEGREE);
@@ -59,33 +65,26 @@ template <typename T> class SphericalHarmonicsEncodingFactory : public EncodingF
 
         const uint32_t degree = config[EncodingParams::DEGREE];
         const uint32_t n_dims_to_encode = config[EncodingParams::N_DIMS_TO_ENCODE];
-        return std::make_shared<SphericalHarmonicsEncoding<T>>(degree, n_dims_to_encode);
+        return std::make_shared<SphericalHarmonicsEncoding<T>>(degree, n_dims_to_encode, 
+            padded_output_width.has_value() ? padded_output_width.value() : (degree*degree), Q);
     }
 };
 
-template <typename T> class GridEncodingFactory;
-
-// Specialization for T = bf16 (exclude implementation)
-template <>
-class GridEncodingFactory<sycl::ext::oneapi::bfloat16> : public EncodingFactory<sycl::ext::oneapi::bfloat16> {
-  public:
-    std::shared_ptr<Encoding<sycl::ext::oneapi::bfloat16>> create(const json &config) const override {
-        // Throw an error or handle the unsupported case for bf16
-        throw std::runtime_error("GridEncodingFactory does not support bf16");
-    }
-};
-
-// Specialization for T != bf16 (include implementation)
 // EncodingFactory for GridEncodingTemplated
 template <typename T> class GridEncodingFactory : public EncodingFactory<T> {
   public:
-    std::shared_ptr<Encoding<T>> create(const json &config) const override {
+    std::shared_ptr<Encoding<T>> create(const json &config, 
+        std::optional<uint32_t> padded_output_width, sycl::queue& Q) const override 
+    {
+        static_assert(std::is_same<T, float>::value, "GridEncodingFactory only supports float");
 
-        return tinydpcppnn::encodings::grid::create_grid_encoding<T>(config);
+        return tinydpcppnn::encodings::grid::create_grid_encoding<T>(config, padded_output_width, Q);
     }
 };
 
-template <typename T> std::shared_ptr<Encoding<T>> create_encoding(const json &config) {
+template <typename T> std::shared_ptr<Encoding<T>> create_encoding(const json &config, 
+    sycl::queue& Q, std::optional<uint32_t> padded_output_width = std::nullopt) 
+{
 
     auto check_config = [&](const json &config) {
         if (!config.contains(EncodingParams::ENCODING))
@@ -143,5 +142,5 @@ template <typename T> std::shared_ptr<Encoding<T>> create_encoding(const json &c
     else
         throw std::invalid_argument("Unknown encoding type: " + name);
 
-    return factory->create(config);
+    return factory->create(config, padded_output_width, Q);
 }

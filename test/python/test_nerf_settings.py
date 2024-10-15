@@ -15,7 +15,8 @@ def test_constructor(dtype):
     N_min = 16
     L = 16
 
-    xyz_encoder = NetworkWithInputEncoding(
+    with pytest.raises(NotImplementedError):
+        xyz_encoder = NetworkWithInputEncoding(
         n_input_dims=3,
         n_output_dims=16,
         encoding_config={
