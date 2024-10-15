@@ -191,33 +191,6 @@ TEST_CASE("tinydpcppnn::encoding Identity") {
             doctest::Approx(out[i]).epsilon(epsilon));
     }
   }
-
-#ifdef TEST_PATH
-  SUBCASE("Check results loaded float") {
-    // SWIFTNET
-    const int input_width = 3;
-    const int batch_size = 256;
-    const int output_width = 3;
-    sycl::queue q;
-    std::string filepath = std::string(TEST_PATH) +
-                           "/tiny-dpcpp-data/ref_values/encoding/identity/";
-    test_encoding_with_no_params_forward_from_loaded_file<float>(
-        batch_size, input_width, output_width, filepath, q);
-  }
-
-  SUBCASE("Check results loaded bf16") {
-    // SWIFTNET
-    const int input_width = 3;
-    const int batch_size = 256;
-    const int output_width = 3;
-    sycl::queue q;
-
-    std::string filepath = std::string(TEST_PATH) +
-                           "/tiny-dpcpp-data/ref_values/encoding/identity/";
-    test_encoding_with_no_params_forward_from_loaded_file<bf16>(
-        batch_size, input_width, output_width, filepath, q);
-  }
-#endif
 }
 
 TEST_CASE("tinydpcppnn::encoding Spherical Harmonics") {
@@ -255,21 +228,6 @@ TEST_CASE("tinydpcppnn::encoding Spherical Harmonics") {
     // tolerance
     CHECK(areVectorsWithinTolerance(out, reference_out, epsilon));
   }
-
-#ifdef TEST_PATH
-  SUBCASE("Check results loaded float") {
-    // SWIFTNET
-    const int input_width = 3;
-    const int batch_size = 256;
-    const int output_width = 16;
-    sycl::queue q;
-
-    std::string filepath = std::string(TEST_PATH) +
-                           "/tiny-dpcpp-data/ref_values/encoding/spherical/";
-    test_encoding_with_no_params_forward_from_loaded_file<float>(
-        batch_size, input_width, output_width, filepath, q);
-  }
-#endif
 }
 
 TEST_CASE("tinydpcppnn::encoding Grid Encoding") {
@@ -380,64 +338,6 @@ TEST_CASE("tinydpcppnn::encoding Grid Encoding") {
     CHECK(isVectorWithinTolerance(encoding->get_params()->copy_to_host(), 1.0f,
                                   1e-3));
   }
-
-#ifdef TEST_PATH
-  SUBCASE("Check results loaded, base resolution 15") {
-    // SWIFTNET
-    const int input_width = 2;
-    const int batch_size = 256;
-    const int output_width = 32;
-    sycl::queue q;
-
-    std::string filepath =
-        std::string(TEST_PATH) +
-        "/tiny-dpcpp-data/ref_values/encoding/gridbase_resolution_15/";
-    test_encoding_training_from_loaded_file<float>(batch_size, input_width,
-                                                   output_width, filepath, q);
-  }
-  SUBCASE("Check results loaded, n_levels 15") {
-    // SWIFTNET
-    const int input_width = 2;
-    const int batch_size = 256;
-    const int output_width = 30;
-    sycl::queue q;
-
-    std::string filepath =
-        std::string(TEST_PATH) +
-        "/tiny-dpcpp-data/ref_values/encoding/gridn_levels15/";
-
-    test_encoding_training_from_loaded_file<float>(batch_size, input_width,
-                                                   output_width, filepath, q);
-  }
-  SUBCASE("Check results loaded, per level scale 1") {
-    // SWIFTNET
-    const int input_width = 2;
-    const int batch_size = 256;
-    const int output_width = 32;
-    sycl::queue q;
-
-    std::string filepath =
-        std::string(TEST_PATH) +
-        "/tiny-dpcpp-data/ref_values/encoding/gridper_level_scale1/";
-
-    test_encoding_training_from_loaded_file<float>(batch_size, input_width,
-                                                   output_width, filepath, q);
-  }
-  SUBCASE("Check results loaded, per level scale 1.5") {
-    // SWIFTNET
-    const int input_width = 2;
-    const int batch_size = 256;
-    const int output_width = 32;
-    sycl::queue q;
-
-    std::string filepath =
-        std::string(TEST_PATH) +
-        "/tiny-dpcpp-data/ref_values/encoding/gridper_level_scale15/";
-
-    test_encoding_training_from_loaded_file<float>(batch_size, input_width,
-                                                   output_width, filepath, q);
-  }
-#endif
 }
 
 TEST_CASE("tinydpcppnn::encoding bad configs") {

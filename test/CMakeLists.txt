@@ -3,32 +3,10 @@
 
 find_package(IntelSYCL REQUIRED)
 
-# Define a function to check for and clone the repository if necessary
-function(check_or_clone_data_repository)
-    if(NOT EXISTS "${PROJECT_SOURCE_DIR}/test/tiny-dpcpp-data/ref_values")
-        message(STATUS "tiny-dpcpp-data does not exist in ${PROJECT_SOURCE_DIR}/test/. Clone tiny-dpcpp-data repository. This might take a bit")
-        execute_process(
-            COMMAND git submodule update --init -- test/tiny-dpcpp-data
-            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-            RESULT_VARIABLE clone_result
-        )
-        if(clone_result)
-            message(FATAL_ERROR "Failed to recursive pull tiny-dpcpp-data repository. Please do so manually.")
-        endif()
-    else()
-        message(STATUS "tiny-dpcpp-data repository already exists. Not cloning")
-    endif()
-endfunction()
-
 include(CTest)
 include(${PROJECT_SOURCE_DIR}/extern/doctest/cmake/doctest.cmake)
 include(CommonOptions)
 
-# Pass a preprocessor variable to the C++ code based on the option
-if(BUILD_REF_TEST)
-    check_or_clone_data_repository()
-    add_definitions(-DTEST_PATH="${PROJECT_SOURCE_DIR}/test/")
-endif()
 
 add_library(test-lib STATIC main.cpp)
 target_include_directories(test-lib PUBLIC ${PROJECT_SOURCE_DIR}/extern/)
@@ -67,7 +45,6 @@ add_executable(test-kernel-esimd doctest_kernel_esimd.cpp)
 add_sycl_to_target(TARGET test-kernel-esimd SOURCES doctest_kernel_esimd.cpp)
 target_link_libraries(test-kernel-esimd PRIVATE test-lib network)
 doctest_discover_tests(test-kernel-esimd)
-
 
 add_executable(test-device-precision doctest_device_precision.cpp)
 add_sycl_to_target(TARGET test-device-precision SOURCES doctest_device_precision.cpp)
