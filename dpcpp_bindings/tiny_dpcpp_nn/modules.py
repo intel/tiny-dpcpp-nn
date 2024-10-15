@@ -147,7 +147,6 @@ class _module_function(torch.autograd.Function):
         # 5 inputs to forward, so need 5 grads
         return (None, input_grad, grad, None, None)
 
-
 class Module(torch.nn.Module):
     def __init__(
         self,
@@ -195,7 +194,7 @@ class Module(torch.nn.Module):
             else:  # don't do anything if no params to be set
                 return
 
-        packed = params is None and self.name != "encoding"
+        packed = params is None and self.name != "encoding" # encoding weights are never packed
 
         if params is None:
             # this forces the backend to use the self.params which were overwritten in python only (pointing to different backend arrays)
@@ -324,8 +323,6 @@ class NetworkWithInputEncoding(Module):
         use_bias=True,
     ):
         raise NotImplementedError("NetworkWithInputEncoding is currently not implemented. Please create encoding and network separately and concatenate them with torch.nn.Sequential(encoding, network)")
-
-
 
 
 class Encoding(Module):
