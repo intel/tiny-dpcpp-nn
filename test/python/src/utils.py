@@ -193,7 +193,7 @@ def create_models(
     use_constant_weight=False,
     store_params_as_full_precision=False,
 ):
-
+    assert not use_nwe, "Currently NetworkWithEncodings is not supported"
     # Create and test CustomMLP
     model_torch = MLP(
         input_size,
