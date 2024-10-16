@@ -1,10 +1,21 @@
+#pragma once
+
 #include <cmath>
 #include <iostream>
 #include <random>
 #include <string>
 #include <vector>
 
+#include "common.h"
+
 namespace mlp_cpp {
+
+enum WeightInitMode
+{
+    linspace,
+    random,
+    constant
+};
 
 template <typename T> std::vector<T> repeat_inner_vectors(const std::vector<std::vector<T>> &layer_outputs, int N) {
     // this function is to replicate how to stack over batch sizes in Swiftnet
@@ -144,8 +155,8 @@ template <typename T> class MLP {
     int outputDim;
     int hiddenDim;
 
-    std::string activation;
-    std::string output_activation;
+    const Activation activation;
+    const Activation output_activation;
     // Utility function to initialize the weights randomly
 
     void initialize_random_weights(double weight_val_scaling_factor) {
@@ -165,8 +176,8 @@ template <typename T> class MLP {
     }
 
   public:
-    MLP(int inputDim_, int hiddenDim_, int outputDim_, int n_hidden_layers_, int batch_size_, std::string activation_,
-        std::string output_activation_, std::string weight_init_mode)
+    MLP(int inputDim_, int hiddenDim_, int outputDim_, int n_hidden_layers_, int batch_size_, Activation activation_,
+        Activation output_activation_, WeightInitMode weight_init_mode)
         : n_hidden_layers(n_hidden_layers_), activation(activation_), output_activation(output_activation_),
           inputDim(inputDim_), outputDim(outputDim_), hiddenDim(hiddenDim_), batch_size(batch_size_) {
         /// TODO: normalisation of batch_size is only necessary because this is the implementation for batches of
@@ -187,14 +198,14 @@ template <typename T> class MLP {
         // initialise weights
         double weight_val = 0.1;
         // linspace initialization of weights
-        if (weight_init_mode == "linspace") {
+        if (weight_init_mode == WeightInitMode::linspace) {
             for (int i = 0; i < weights.size(); i++) {
                 weights[i].set_weights_linspace(static_cast<T>(-weight_val * (i + 1)),
                                                 static_cast<T>(weight_val * (i + 1)));
             }
-        } else if (weight_init_mode == "random") {
+        } else if (weight_init_mode == WeightInitMode::random) {
             initialize_random_weights(1.0);
-        } else {
+        } else if (weight_init_mode == WeightInitMode::constant) {
             // default initialization of weights (to small random values or zeros)
             for (auto &weight_matrix : weights) {
                 for (auto &row : weight_matrix.data) {
@@ -204,6 +215,7 @@ template <typename T> class MLP {
                 }
             }
         }
+        else throw std::invalid_argument("Invalid weight initialization mode");
 
         // Pad the input matrix by setting cols after inputDim to zero
         for (std::size_t row = 0; row < hiddenDim; ++row) {
@@ -230,13 +242,14 @@ template <typename T> class MLP {
 
             // Apply activation function for hidden layers
             for (T &val : layer_outputs[i + 1]) {
-                if (activation == "relu") {
+                if (activation == Activation::ReLU) {
                     val = relu(val);
-                } else if (activation == "sigmoid") {
+                } else if (activation == Activation::Sigmoid) {
                     val = sigmoid(val);
-                } else {
+                } else if (activation == Activation::None) {
                     val = linear(val);
                 }
+                else throw std::invalid_argument("Invalid activation function");
             }
         }
 
@@ -244,13 +257,14 @@ template <typename T> class MLP {
         layer_outputs[n_hidden_layers] = weights[n_hidden_layers - 1] * layer_outputs[n_hidden_layers - 1];
 
         for (T &val : layer_outputs[n_hidden_layers]) {
-            if (output_activation == "relu") {
+            if (output_activation == Activation::ReLU) {
                 val = relu(val);
-            } else if (output_activation == "sigmoid") {
+            } else if (output_activation == Activation::Sigmoid) {
                 val = sigmoid(val);
-            } else { // This covers "linear" or any unspecified activation, which defaults to linear
+            } else if (output_activation == Activation::None) {
                 val = linear(val);
             }
+            else throw std::invalid_argument("Invalid activation function");
         }
         if (get_interm_fwd) {
             if (hiddenDim > layer_outputs[n_hidden_layers].size()) {
@@ -297,13 +311,14 @@ template <typename T> class MLP {
 
         // calculate the interm_back (activated) backward pass for the last layer
         for (std::size_t i = 0; i < delta.back().size(); ++i) {
-            if (output_activation == "relu") {
+            if (output_activation == Activation::ReLU) {
                 delta.back()[i] *= drelu(layer_outputs.back()[i]); // ReLU derivative
-            } else if (output_activation == "sigmoid") {
+            } else if (output_activation == Activation::Sigmoid) {
                 delta.back()[i] *= dsigmoid(layer_outputs.back()[i]); // Sigmoid derivative
-            } else {
+            } else if (output_activation == Activation::None) {
                 delta.back()[i] *= dlinear(layer_outputs.back()[i]); // Linear derivative
             }
+            else throw std::invalid_argument("Invalid activation function");
         }
 
         // Go through layers in reverse order to propagate the error
@@ -319,13 +334,13 @@ template <typename T> class MLP {
             // Apply derivative of the activation function
             for (std::size_t j = 0; j < layer_outputs[i + 1].size(); ++j) {
 
-                if (activation == "relu") {
+                if (activation == Activation::ReLU) {
                     new_delta[j] *= drelu(layer_outputs[i + 1][j]);
-                } else if (activation == "sigmoid") {
+                } else if (activation == Activation::Sigmoid) {
                     new_delta[j] *= dsigmoid(layer_outputs[i + 1][j]);
-                } else {
+                } else if (activation == Activation::None){
                     new_delta[j] *= dlinear(layer_outputs[i + 1][j]);
-                }
+                } else throw std::invalid_argument("Invalid activation function");
             }
             delta[i] = new_delta;
         }

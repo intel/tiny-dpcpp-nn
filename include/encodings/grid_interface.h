@@ -29,6 +29,12 @@ struct GridOffsetTable {
 
 template <typename T> class GridEncoding : public Encoding<T> {
   public:
+    GridEncoding(const uint32_t input_width, const uint32_t output_width, 
+        const uint32_t padded_output_width, sycl::queue& Q) : 
+        Encoding<T>(input_width, output_width, padded_output_width, Q) {}
+    GridEncoding() = delete;
+    virtual ~GridEncoding() {}
+
     virtual uint32_t n_pos_dims() const = 0;
     virtual uint32_t n_features_per_level() const = 0;
 

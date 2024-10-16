@@ -7,7 +7,6 @@ from tiny_dpcpp_nn_pybind_module import (
     Activation,
     create_network,
     create_encoding,
-    create_networkwithencoding,
 )
 
 MIN_BATCH_SIZE = 8  # in tiny-dpcpp-nn the smallest possible batch size is 8
@@ -148,7 +147,6 @@ class _module_function(torch.autograd.Function):
         # 5 inputs to forward, so need 5 grads
         return (None, input_grad, grad, None, None)
 
-
 class Module(torch.nn.Module):
     def __init__(
         self,
@@ -196,7 +194,7 @@ class Module(torch.nn.Module):
             else:  # don't do anything if no params to be set
                 return
 
-        packed = params is None
+        packed = params is None and self.name != "encoding" # encoding weights are never packed
 
         if params is None:
             # this forces the backend to use the self.params which were overwritten in python only (pointing to different backend arrays)
@@ -324,46 +322,7 @@ class NetworkWithInputEncoding(Module):
         backend_param_dtype=torch.float16,
         use_bias=True,
     ):
-        self.network_config = network_config
-
-        self.width = self.network_config["n_neurons"]
-        self.n_input_dims = n_input_dims
-        self.n_output_dims = n_output_dims
-        self.n_hidden_layers = self.network_config["n_hidden_layers"]
-        self.activation = get_dpcpp_activation(self.network_config["activation"])
-        self.output_activation = get_dpcpp_activation(
-            self.network_config["output_activation"]
-        )
-        self.name = "network_with_encoding"
-
-        self.encoding_config = encoding_config
-        self.encoding_name = self.encoding_config["otype"]
-
-        if "n_dims_to_encode" not in self.encoding_config:
-            self.encoding_config["n_dims_to_encode"] = self.n_input_dims
-        assert (
-            input_dtype == torch.float
-        ), f"Currently only torch.float supported as input_dtype. {input_dtype} was chosen instead"
-        super().__init__(
-            device=device,
-            input_dtype=input_dtype,
-            store_params_as_full_precision=store_params_as_full_precision,
-            backend_param_dtype=backend_param_dtype,
-            use_bias=use_bias,
-        )
-
-    def create_module(self):
-
-        return create_networkwithencoding(
-            self.n_input_dims,
-            self.n_output_dims,
-            self.n_hidden_layers,
-            self.activation,
-            self.output_activation,
-            self.encoding_config,
-            self.width,
-            str(self.backend_param_dtype),
-        )
+        raise NotImplementedError("NetworkWithInputEncoding is currently not implemented. Please create encoding and network separately and concatenate them with torch.nn.Sequential(encoding, network)")
 
 
 class Encoding(Module):

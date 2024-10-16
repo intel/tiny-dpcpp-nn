@@ -75,8 +75,6 @@ To build the tiny-nn librairy, you can clone the github repo on your machine and
 git submodule update --init -- extern/pybind11
 ```
 
-If you also want to pull the reference unittest data in `test/tiny_dpcpp_data`, which are ~500 MB of reference inputs, outputs, and weights, you can also run `git submodule update --init`. Note, that if `BUILD_REF_TEST=ON` in CMakeLists.txt, then `test/tiny_dpcpp_data` will be cloned as well.
-
 Then you can build the library using :
 
 ```bash
@@ -146,14 +144,12 @@ cd samples && python mlp_learning_an_image_pytorch.py
 ```
 ## Tests
 
-When setting the additional flag `BUILD_REF_TEST=ON`, additional data from [tiny-dpcpp-data](https://github.com/intel-sandbox/tiny-dpcpp-data) will be downloaded.
-
 When setting the additional flag `BUILD_TORCH_TEST=ON`, the libtorch tests (`tnn_api.h`) will be built.
 
 To have all tests, run:
 
 ```bash
-cmake -DTARGET_DEVICE="PVC" -DBUILD_REF_TEST="ON" -DBUILD_TORCH_TEST="ON" ..
+cmake -DTARGET_DEVICE="PVC" -DBUILD_TORCH_TEST="ON" ..
 ```
 
 After all tests are build into `build/`, you can run `cd build/ && make tests` to verfiy that the setup is correct. Please note that we provide tests for both the core `dpcpp` implementation and the `libtorch` wrapper implementation.

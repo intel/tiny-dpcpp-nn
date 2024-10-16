@@ -15,7 +15,9 @@
 #include "mlp.h"
 #include "result_check.h"
 #include "tnn_api.h"
+#include "common.h"
 #include <ipex.h>
+#include "common_test.h"
 
 using namespace sycl;
 using json = nlohmann::json;
@@ -25,60 +27,28 @@ bool checkTensorClose(const torch::Tensor &input, const torch::Tensor &output) {
     return torch::allclose(input, output, 1e-3);
 }
 
-template <typename T> std::vector<T> create_padded_vector(int output_width, T target_val, int padded_output_width) {
-    if (output_width > padded_output_width) {
-        throw std::invalid_argument("output_width cannot be greater than N");
-    }
 
-    // Initialize a vector of N zeros
-    std::vector<T> target_ref(padded_output_width, 0);
-    // Set the first output_width elements to target_val
-    std::fill_n(target_ref.begin(), output_width, target_val);
-    return target_ref;
-}
 
 template <typename T, typename T_ref, int WIDTH = 64>
 void test_network_backward(sycl::queue &q, const int input_width, const int output_width, const int n_hidden_layers,
-                           const int batch_size, std::string activation, std::string output_activation,
-                           std::string weight_init_mode) {
+                           const int batch_size, Activation activation, Activation output_activation,
+                           mlp_cpp::WeightInitMode weight_init_mode) {
 
     // main functionalities of backward and forward are tested in doctest_swifnet
     // here, we test only if the combination of encoding (tested in doctest_encoding) and swifnet works
     const T_ref input_val = 1.0;
     const T_ref target_val = 0.1;
-    const int padded_output_width = WIDTH;
-    const int padded_input_width = WIDTH;
+    constexpr int padded_output_width = WIDTH;
+    constexpr int padded_input_width = WIDTH;
 
-    std::vector<T_ref> input_ref = create_padded_vector<T_ref>(input_width, input_val, padded_input_width);
-    std::vector<T_ref> target_ref = create_padded_vector<T_ref>(output_width, target_val, padded_output_width);
-
-    Activation network_activation;
-    if (activation == "relu") {
-        network_activation = Activation::ReLU;
-    } else if (activation == "linear") {
-        network_activation = Activation::None;
-    } else if (activation == "sigmoid") {
-        network_activation = Activation::Sigmoid;
-    } else {
-        throw std::invalid_argument("Unsupported Activation");
-    }
-
-    Activation network_output_activation;
-    if (output_activation == "relu") {
-        network_output_activation = Activation::ReLU;
-    } else if (output_activation == "linear") {
-        network_output_activation = Activation::None;
-    } else if (output_activation == "sigmoid") {
-        network_output_activation = Activation::Sigmoid;
-    } else {
-        throw std::invalid_argument("Unsupported Output Activation");
-    }
+    std::vector<T_ref> input_ref = test::common::create_padded_vector<T_ref>(input_width, input_val, padded_input_width);
+    std::vector<T_ref> target_ref = test::common::create_padded_vector<T_ref>(output_width, target_val, padded_output_width);
 
     mlp_cpp::MLP<T_ref> mlp(input_width, WIDTH, output_width, n_hidden_layers + 1, batch_size, activation,
                             output_activation, weight_init_mode);
 
-    tnn::NetworkModule<T, WIDTH> Net(input_width, output_width, n_hidden_layers, network_activation,
-                                     network_output_activation, false);
+    tnn::NetworkModule<T, WIDTH> Net(input_width, output_width, n_hidden_layers, activation,
+                                     output_activation, false);
 
     std::vector<T> unpacked_weights = mlp_cpp::convert_vector<T_ref, T>(mlp.getUnpackedWeights());
     auto network_torch_params = tnn::Module::convertVectorToTensor<T>(unpacked_weights).to(c10::ScalarType::BFloat16);
@@ -155,12 +125,12 @@ void test_network_backward(sycl::queue &q, const int input_width, const int outp
 }
 
 TEST_CASE("Network - test bwd unpadded") {
-    sycl::queue q(sycl::gpu_selector_v);
-    const int n_hidden_layers = 1;
+   
     // test_network_backward<bf16, double, 16>(q, 16, 16, n_hidden_layers, 8, "sigmoid", "linear", "constant");
-    auto test_function = [=](sycl::queue &q, const int width, const int batch_size, std::string activation,
-                             std::string output_activation, std::string weight_init_mode) {
+    auto test_function = [=](sycl::queue &q, const int batch_size, const int width, Activation activation,
+                             Activation output_activation, mlp_cpp::WeightInitMode weight_init_mode, bool random_init) {
         typedef bf16 T;
+        constexpr int n_hidden_layers = 1;
         if (width == 16) {
             // Define the parameters for creating IdentityEncoding
             test_network_backward<T, double, 16>(q, 16, 16, n_hidden_layers, batch_size, activation, output_activation,
@@ -180,30 +150,17 @@ TEST_CASE("Network - test bwd unpadded") {
         } else
             throw std::invalid_argument("Unsupported width");
     };
-    const int widths[] = {16, 32, 64, 128};
-    const int batch_sizes[] = {8, 16, 32, 64};
-    std::string activations[] = {"linear", "relu", "sigmoid"};
-    std::string output_activations[] = {"linear", "sigmoid"};
-    std::string weight_init_modes[] = {"random"};
 
-    for (int batch_size : batch_sizes) {
-        for (int width : widths) {
-            for (std::string activation : activations) {
-                for (std::string output_activation : output_activations) {
-                    for (std::string weight_init_mode : weight_init_modes) {
-                        std::string testName =
-                            "Testing grad WIDTH " + std::to_string(width) + " - activation: " + activation +
-                            " - output_activation: " + output_activation + " - weight_init_mode: " + weight_init_mode +
-                            " - Batch size: " + std::to_string(batch_size);
-                        SUBCASE(testName.c_str()) {
-                            CHECK_NOTHROW(
-                                test_function(q, width, batch_size, activation, output_activation, weight_init_mode));
-                        }
-                    }
-                }
-            }
-        }
-    }
+    sycl::queue q(sycl::gpu_selector_v);
+
+    std::vector<int> batch_sizes{8, 16, 32, 64};
+    std::vector<int> widths{16, 32, 64, 128};
+    std::vector<Activation> activations{Activation::None, Activation::ReLU, Activation::Sigmoid};
+    std::vector<Activation> output_activations{Activation::None, Activation::Sigmoid};
+    std::vector<mlp_cpp::WeightInitMode> weight_init_modes{mlp_cpp::WeightInitMode::random};
+    std::vector<bool> random_inits{false};
+
+    test::common::LoopOverParams(q, batch_sizes, widths, activations, output_activations, weight_init_modes, random_inits, test_function);
 }
 
 // TEST_CASE("Network - test bwd input padded") {

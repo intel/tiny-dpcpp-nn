@@ -84,48 +84,6 @@ bool isequalstring(const std::string &str1, const std::string &str2) {
            });
 }
 
-bool g_verbose = false;
-bool verbose() { return g_verbose; }
-void set_verbose(bool verbose) { g_verbose = verbose; }
-
-std::function<void(LogSeverity, const std::string &)> g_log_callback = [](LogSeverity severity,
-                                                                          const std::string &msg) {
-    switch (severity) {
-    case LogSeverity::Warning:
-        std::cerr << "tiny-dpcpp-nn warning: " << msg << std::endl;
-        ;
-        break;
-    case LogSeverity::Error:
-        std::cerr << "tiny-dpcpp-nn error: " << msg << std::endl;
-        ;
-        break;
-    default:
-        break;
-    }
-
-    if (verbose()) {
-        switch (severity) {
-        case LogSeverity::Debug:
-            std::cerr << "tiny-dpcpp-nn debug: " << msg << std::endl;
-            ;
-            break;
-        case LogSeverity::Info:
-            std::cerr << "tiny-dpcpp-nn info: " << msg << std::endl;
-            ;
-            break;
-        case LogSeverity::Success:
-            std::cerr << "tiny-dpcpp-nn success: " << msg << std::endl;
-            ;
-            break;
-        default:
-            break;
-        }
-    }
-};
-
-const std::function<void(LogSeverity, const std::string &)> &log_callback() { return g_log_callback; }
-void set_log_callback(const std::function<void(LogSeverity, const std::string &)> &cb) { g_log_callback = cb; }
-
 Activation string_to_activation(const std::string &activation_name) {
     if (equals_case_insensitive(activation_name, "None")) {
         return Activation::None;

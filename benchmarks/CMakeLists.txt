@@ -42,3 +42,8 @@ add_executable(benchmark-all benchmark_all.cpp)
 add_sycl_to_target(TARGET benchmark-all SOURCES benchmark_all.cpp)
 target_link_libraries(benchmark-all PRIVATE network ${MPI_CXX_LIBRARIES})
 target_include_directories(benchmark-all PRIVATE "${PROJECT_SOURCE_DIR}/include/")
+
+add_executable(benchmark-encoding benchmark_encoding.cpp)
+add_sycl_to_target(TARGET benchmark-encoding SOURCES benchmark_encoding.cpp)
+target_link_libraries(benchmark-encoding PRIVATE network ${MPI_CXX_LIBRARIES})
+target_include_directories(benchmark-encoding PRIVATE "${PROJECT_SOURCE_DIR}/include/")
