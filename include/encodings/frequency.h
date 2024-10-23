@@ -63,13 +63,9 @@ public:
         this->get_queue().parallel_for(num_elements, [=](sycl::id<1> index) {
             
             const size_t encoded_index = index;
-            if (encoded_index >= num_elements) return;
 
             const uint32_t i = encoded_index / padded_output_width;
             const uint32_t j = encoded_index - i * padded_output_width;
-
-            if (i >= input.m()) return;
-            if (j >= padded_output_width) return;
 
             if (j >= output_width) {
                 loc_output(i, j) = (T)1;
