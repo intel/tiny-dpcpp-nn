@@ -1,6 +1,7 @@
 from tiny_dpcpp_nn import Encoding
 import torch
 import numpy as np
+import math
 
 
 def test_grid():
@@ -589,7 +590,52 @@ def test_identity():
     assert torch.all(torch.isclose(input_encoding, output_encoding))
 
 
+def test_padding():
+
+    identity_encodings = Encoding(
+        n_input_dims=3,
+        encoding_config={
+            "otype": "Identity",
+            "scale": 1.0,
+            "offset": 0.0,
+        },
+        n_output_dims=5346,
+    )
+
+    input_encoding = torch.ones((10, 3)).to("xpu")
+    output_encoding = identity_encodings(input_encoding)
+    assert identity_encodings.n_output_dims == 5346
+    assert output_encoding.shape[1] == 5346
+
+
+def test_frequency():
+    frequency_encoding = Encoding(
+        n_input_dims=1,
+        encoding_config={
+            "otype": "Frequency",
+            "n_frequencies": 1.0,
+        },
+    )
+    # Set up input and output
+    batch_size = 1
+    input_val = 1.234
+    input_tensor = torch.ones(batch_size, 1).xpu() * input_val
+
+    # Run forward pass
+    output_tensor = frequency_encoding.forward(input_tensor)
+    # Expected output values
+    expected = torch.tensor(
+        [[math.sin(math.pi * input_val), math.cos(math.pi * input_val)]], device="xpu"
+    )
+    # Check if result matches expected values
+    assert torch.allclose(
+        output_tensor, expected, atol=1e-4
+    ), f"Output: {output_tensor}, Expected: {expected}"
+
+
 if __name__ == "__main__":
-    test_identity()
-    test_spherical()
-    test_grid()
+    # test_identity()
+    # test_spherical()
+    # test_grid()
+    # test_frequency()
+    test_padding()

@@ -48,12 +48,14 @@ struct EncodingParams {
       "interpolation";  // InterpolationType
   inline static const std::string USE_STOCHASTIC_INTERPOLATION =
       "stochastic_interpolation";  // bool
+  inline static const std::string N_FREQUENCIES = "n_frequencies";  // uint32_t
 };
 
 struct EncodingNames {
   inline static const std::string IDENTITY = "Identity";
   inline static const std::string SPHERICALHARMONICS = "SphericalHarmonics";
   inline static const std::string GRID = "HashGrid";
+  inline static const std::string FREQUENCY = "Frequency";
 };
 
 enum class GradientMode {
@@ -106,6 +108,8 @@ class Encoding {
       throw std::invalid_argument(
           "Padded output width cannot be less than output width");
   }
+
+
   virtual ~Encoding() {}
 
   virtual std::unique_ptr<Context> forward_impl(

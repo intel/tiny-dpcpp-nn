@@ -32,13 +32,15 @@ template <typename T> class IdentityEncoding : public Encoding<T> {
             m_scale{scale}, m_offset{offset} {}
 
     std::unique_ptr<Context> forward_impl(const DeviceMatrixView<float> input,
-                                          DeviceMatrixView<T> *output = nullptr, bool use_inference_params = false,
+                                          DeviceMatrixView<T> *output = nullptr, 
+                                          bool use_inference_params = false,
                                           bool prepare_input_gradients = false) override {
 
         if (!output || this->get_padded_output_width() == 0) return std::make_unique<Context>();
         if (input.n() != this->get_input_width())
             throw std::invalid_argument("input dimensions do not coincide with encoder");
         if (use_inference_params) throw std::invalid_argument("Cannot yet use inference params");
+        if (prepare_input_gradients) throw std::invalid_argument("Identity encoding cannot yet prepare input gradients");
         if (output->m() != input.m()) throw std::invalid_argument("Differing row numbers");
         if (output->n() != this->get_padded_output_width())
             throw std::invalid_argument("number of cols has to be padded output width.");
@@ -84,8 +86,7 @@ template <typename T> class IdentityEncoding : public Encoding<T> {
 
         if (!dL_dinput) return;
 
-        const size_t n_elements = input.n() * this->get_input_width();
-        if (n_elements <= 0) return; // nothing to do
+        const size_t n_elements = input.m() * this->get_input_width();
 
         float *const dL_dx = dL_dinput->data();
         T const *const dL_dy = dL_doutput.GetPointer();

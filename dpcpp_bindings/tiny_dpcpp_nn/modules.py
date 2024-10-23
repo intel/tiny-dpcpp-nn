@@ -13,9 +13,11 @@ MIN_BATCH_SIZE = 8  # in tiny-dpcpp-nn the smallest possible batch size is 8
 
 torch.set_printoptions(precision=2)
 
+
 def free_temporary_memory():
     """Dummy function for compatibility"""
     pass
+
 
 def unpad_tensor_to_input_dim(padded_tensor, output_dim):
     batch_size, current_width = padded_tensor.shape
@@ -147,6 +149,7 @@ class _module_function(torch.autograd.Function):
         # 5 inputs to forward, so need 5 grads
         return (None, input_grad, grad, None, None)
 
+
 class Module(torch.nn.Module):
     def __init__(
         self,
@@ -155,8 +158,11 @@ class Module(torch.nn.Module):
         input_dtype=torch.float16,
         backend_param_dtype=torch.float16,
         use_bias=True,
+        init_module=True,
     ):
         super(Module, self).__init__()
+        if not init_module:
+            return
         self.device = device
         self.use_bias = use_bias
         self.input_dtype = input_dtype
@@ -194,7 +200,9 @@ class Module(torch.nn.Module):
             else:  # don't do anything if no params to be set
                 return
 
-        packed = params is None and self.name != "encoding" # encoding weights are never packed
+        packed = (
+            params is None and self.name != "encoding"
+        )  # encoding weights are never packed
 
         if params is None:
             # this forces the backend to use the self.params which were overwritten in python only (pointing to different backend arrays)
@@ -309,36 +317,20 @@ class Network(Module):
         )
 
 
-class NetworkWithInputEncoding(Module):
-    def __init__(
-        self,
-        n_input_dims,
-        n_output_dims,
-        network_config,
-        encoding_config,
-        device="xpu",
-        store_params_as_full_precision=True,
-        input_dtype=torch.float,
-        backend_param_dtype=torch.float16,
-        use_bias=True,
-    ):
-        raise NotImplementedError("NetworkWithInputEncoding is currently not implemented. Please create encoding and network separately and concatenate them with torch.nn.Sequential(encoding, network)")
-
-
 class Encoding(Module):
     def __init__(
         self,
         n_input_dims,
         encoding_config,
+        n_output_dims=None,  # when None, use the default n_output_dim of the encoding
         device="xpu",
         input_dtype=torch.float,
         store_params_as_full_precision=True,
         backend_param_dtype=torch.float,
     ):
         self.n_input_dims = n_input_dims
-
         self.encoding_config = encoding_config
-
+        self.padded_output_dims = n_output_dims
         self.encoding_name = self.encoding_config["otype"]
         self.name = "encoding"
 
@@ -360,10 +352,57 @@ class Encoding(Module):
             backend_param_dtype=backend_param_dtype,
         )
 
+        # must call after super().__init__() as it calls create_module, which
+        # in term creates self.tnn_module.n_output_dims()
         self.n_output_dims = self.tnn_module.n_output_dims()
 
     def create_module(self):
         return create_encoding(
-            self.encoding_name,
-            self.encoding_config,
+            self.encoding_name, self.encoding_config, self.padded_output_dims
         )
+
+
+class NetworkWithInputEncoding(Module):
+    def __init__(
+        self,
+        n_input_dims,
+        n_output_dims,
+        network_config,
+        encoding_config,
+        device="xpu",
+        store_params_as_full_precision=True,
+        input_dtype=torch.float,
+        backend_param_dtype=torch.float16,
+        use_bias=True,
+    ):
+        super().__init__(init_module=False)
+        self.encoding = Encoding(
+            n_input_dims,
+            encoding_config,
+            device=device,
+            input_dtype=input_dtype,
+            backend_param_dtype=torch.float,
+            store_params_as_full_precision=store_params_as_full_precision,
+            n_output_dims=network_config["n_neurons"],
+        )
+        assert self.encoding.n_output_dims == network_config["n_neurons"]
+        self.network = Network(
+            self.encoding.n_output_dims,
+            n_output_dims,
+            network_config,
+            device=device,
+            input_dtype=torch.float,
+            store_params_as_full_precision=store_params_as_full_precision,
+            backend_param_dtype=backend_param_dtype,
+            use_bias=use_bias,
+        )
+        self.network_with_encoding = torch.nn.Sequential(self.encoding, self.network)
+
+    def get_params(self):
+        raise RuntimeError("Not implemented")
+
+    def set_params(self):
+        raise RuntimeError("Not implemented")
+
+    def forward(self, x):
+        return self.network_with_encoding(x)
