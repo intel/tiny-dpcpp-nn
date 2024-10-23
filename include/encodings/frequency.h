@@ -23,8 +23,8 @@ class FrequencyEncoding : public Encoding<T> {
 public:
     FrequencyEncoding(const uint32_t n_frequencies, const uint32_t n_dims_to_encode,
         const uint32_t padded_output_width, sycl::queue& Q) : 
-        Encoding<T>(n_dims_to_encode, m_n_dims_to_encode * m_n_frequencies * 2, 
-            padded_output_width), n_frequencies_{n_frequencies}
+        Encoding<T>(n_dims_to_encode, n_dims_to_encode * n_frequencies * 2, 
+            padded_output_width, Q), n_frequencies_{n_frequencies}
     {}
 
 	std::unique_ptr<Context> forward_impl(
@@ -33,7 +33,7 @@ public:
 		bool use_inference_params = false,
 		bool prepare_input_gradients = false
 	) override {
-        if (!output || this->get_padded_output_width() == 0) return std::make_unique<Context>();
+        if (!output) return std::make_unique<Context>();
         if (input.n() != this->get_input_width())
             throw std::invalid_argument("input dimensions do not coincide with encoder");
         if (use_inference_params) throw std::invalid_argument("Cannot yet use inference params");
@@ -43,10 +43,10 @@ public:
 
         auto forward = std::make_unique<Context>();
 
-        float * const loc_dy_dx = nullptr;
+        float * loc_dy_dx = nullptr;
         if (prepare_input_gradients) {
-            forward = std::make_unique<ForwardContext>(input.m(), this->get_output_width());
-            forward->dy_dx.fill(0.0f); //may not be necessary
+            forward = std::make_unique<ForwardContext>(input.m(), this->get_output_width(), this->get_queue());
+            dynamic_cast<ForwardContext*>(forward.get())->dy_dx.fill(0.0f); //may not be necessary
             loc_dy_dx = dynamic_cast<ForwardContext*>(forward.get())->dy_dx.data();
         }
         
@@ -57,26 +57,33 @@ public:
         const uint32_t padded_output_width = this->get_padded_output_width();
         const uint32_t n_frequencies = n_frequencies_;
 
+        //works always since we checked above, need to do this to copy the object
+        auto loc_output = *output;
+
         this->get_queue().parallel_for(num_elements, [=](sycl::id<1> index) {
             
             const size_t encoded_index = index;
+            if (encoded_index >= num_elements) return;
 
             const uint32_t i = encoded_index / padded_output_width;
             const uint32_t j = encoded_index - i * padded_output_width;
 
+            if (i >= input.m()) return;
+            if (j >= padded_output_width) return;
+
             if (j >= output_width) {
-                output->operator()(i, j) = 1;
+                loc_output(i, j) = (T)1;
             } else {
-                const uint32_t encoded_input_feature_i = j / (n_frequencies * 2);
+                const uint32_t encoded_input_feature_j = j / (n_frequencies * 2);
                 const uint32_t log2_frequency = (j / 2) % n_frequencies;
 
-                const float phase_shift = (j % 2) * (M_PI/2);
+                const float phase_shift = (j % 2) * (M_PI/2.0f);
 
-                const float x = input(i, encoded_input_feature_i) * ((size_t)1<<log2_frequency);
-                const float input = x * M_PI + phase_shift;
-                output->operator()(i, j) = (T)sycl::sin(input);
-                if (dy_dx != nullptr) {
-                    dy_dx[i * output_width + j] = (float)((size_t)1 << log2_frequency) * M_PI * sycl::cos(input);
+                const float x = input(i, encoded_input_feature_j) * 
+                    ((size_t)1<<log2_frequency) * M_PI + phase_shift;
+                loc_output(i, j) = (T)sycl::sin(x);
+                if (loc_dy_dx != nullptr) {
+                    loc_dy_dx[i * output_width + j] = (float)((size_t)1 << log2_frequency) * M_PI * sycl::cos(x);
                 }
             }
         }).wait();
@@ -105,9 +112,10 @@ public:
         //copy to local to avoid implciit copy of 'this'
         const uint32_t n_dims_to_encode = this->get_input_width();
         const size_t num_elements = input.m() * n_dims_to_encode;
-        const n_frequencies = n_frequencies_;
+        const uint32_t n_frequencies = n_frequencies_;
         float const * const dy_dx = 
             dynamic_cast<const ForwardContext&>(ctx).dy_dx.data();
+        auto loc_dL_dinput = dL_dinput->GetView();
         this->get_queue().parallel_for(num_elements, [=](sycl::id<1> index) {
             const uint32_t encoded_index = index;
 
@@ -120,7 +128,7 @@ public:
             for (int k = 0; k < outputs_per_input; ++k) {
                 result += (float)dL_doutput(i, j * outputs_per_input + k) * dy_dx[i * n_dims_to_encode * outputs_per_input + j * outputs_per_input + k];
             }
-            dL_dinput->operator()(i, j) = result;
+            loc_dL_dinput(i, j) = result;
 
         }).wait();
         }
@@ -130,7 +138,7 @@ public:
 private:
     struct ForwardContext : public Context {
 
-        ForwardContext(const size_t n_rows, const size_t n_cols) : dy_dx(n_rows, n_cols, this->get_queue()) {}
+        ForwardContext(const size_t n_rows, const size_t n_cols, sycl::queue& Q) : dy_dx(n_rows, n_cols, Q) {}
 
         DeviceMatrix<float> dy_dx;
     };
