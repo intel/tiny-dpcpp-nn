@@ -69,13 +69,9 @@ class FrequencyEncoding : public Encoding<T> {
               num_elements,
               [=](sycl::id<1> index) {
                 const size_t encoded_index = index;
-                if (encoded_index >= num_elements) return;
 
                 const uint32_t i = encoded_index / padded_output_width;
                 const uint32_t j = encoded_index - i * padded_output_width;
-
-                if (i >= input.m()) return;
-                if (j >= padded_output_width) return;
 
                 if (j >= output_width) {
                   loc_output(i, j) = (T)1;
@@ -118,9 +114,13 @@ class FrequencyEncoding : public Encoding<T> {
             num_elements,
             [=](sycl::id<1> index) {
               const size_t encoded_index = index;
+              if (encoded_index >= num_elements) return;
 
               const uint32_t i = encoded_index / padded_output_width;
               const uint32_t j = encoded_index - i * padded_output_width;
+
+              if (i >= input.m()) return;
+              if (j >= padded_output_width) return;
 
               if (j >= output_width) {
                 loc_output(i, j) = (T)1;
@@ -148,13 +148,55 @@ class FrequencyEncoding : public Encoding<T> {
   return forward;
 }
 
-  void backward_impl(
-      const Context &ctx, const DeviceMatrixView<float> input,
-      const DeviceMatrixView<T> dL_doutput,
-      DeviceMatrixView<T> *gradients = nullptr,
-      DeviceMatrix<float> *dL_dinput = nullptr,
-      bool use_inference_params = false,
-      GradientMode param_gradients_mode = GradientMode::Overwrite) override {
+{
+  // copy the data to avoid implicit copy of 'this'
+  const size_t num_elements = input.m() * this->get_padded_output_width();
+  const uint32_t output_width = this->get_output_width();
+  const uint32_t padded_output_width = this->get_padded_output_width();
+  const uint32_t n_frequencies = n_frequencies_;
+
+  // works always since we checked above, need to do this to copy the object
+  auto loc_output = *output;
+
+  this->get_queue()
+      .parallel_for(
+          num_elements,
+          [=](sycl::id<1> index) {
+            const size_t encoded_index = index;
+
+            const uint32_t i = encoded_index / padded_output_width;
+            const uint32_t j = encoded_index - i * padded_output_width;
+
+            if (j >= output_width) {
+              loc_output(i, j) = (T)1;
+            } else {
+              const uint32_t encoded_input_feature_j = j / (n_frequencies * 2);
+              const uint32_t log2_frequency = (j / 2) % n_frequencies;
+
+              const float phase_shift = (j % 2) * (M_PI / 2.0f);
+
+              const float x = input(i, encoded_input_feature_j) *
+                                  ((size_t)1 << log2_frequency) * M_PI +
+                              phase_shift;
+              loc_output(i, j) = (T)sycl::sin(x);
+              if (loc_dy_dx != nullptr) {
+                loc_dy_dx[i * output_width + j] =
+                    (float)((size_t)1 << log2_frequency) * M_PI * sycl::cos(x);
+              }
+            }
+          })
+      .wait();
+}
+
+return forward;
+}
+
+void backward_impl(
+    const Context &ctx, const DeviceMatrixView<float> input,
+    const DeviceMatrixView<T> dL_doutput,
+    DeviceMatrixView<T> *gradients = nullptr,
+    DeviceMatrix<float> *dL_dinput = nullptr, bool use_inference_params = false,
+    GradientMode param_gradients_mode = GradientMode::Overwrite) override {
   if (input.m() == 0) throw std::invalid_argument("batch_size == 0");
   if (!dL_dinput) return;
 
