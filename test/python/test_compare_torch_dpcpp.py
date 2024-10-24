@@ -14,11 +14,9 @@ output_funcs = ["linear", "sigmoid"]
 output_sizes = [1, -1]
 activation_funcs = ["relu", "linear", "sigmoid"]
 hidden_layer_counts = [1, 2, 4]
-# dtypes = [torch.float16, torch.bfloat16]
-dtypes = [torch.float16]
+dtypes = [torch.float16, torch.bfloat16]
 hidden_sizes = [16, 32, 64, 128]
-# use_nwe_array = [False, True]
-use_nwe_array = [False]
+use_nwe_array = [False, True]
 use_weights_of_tinynn_array = [True]
 BATCH_SIZE = 2**10
 DEVICE_NAME = "xpu"
@@ -131,8 +129,7 @@ def test_grad(
             output_size,
             activation_func,
             output_func,
-            input_dtype=torch.float if use_nwe else dtype,
-            backend_param_dtype=dtype,
+            dtype=dtype,
             use_nwe=use_nwe,
             use_weights_of_tinynn=use_weights_of_tinynn,
             use_constant_weight=use_constant_weight,
@@ -210,8 +207,7 @@ def test_fwd(
         output_size,
         activation_func,
         output_func,
-        input_dtype=torch.float if use_nwe else dtype,
-        backend_param_dtype=dtype,
+        dtype=dtype,
         use_nwe=use_nwe,
         use_weights_of_tinynn=use_weights_of_tinynn,
         use_constant_weight=use_constant_weight,
@@ -221,6 +217,7 @@ def test_fwd(
 
     y_torch = model_torch(input_data)
     y_dpcpp = model_dpcpp(input_data)
+
     # Check for non-finite values in y_torch
     if not torch.isfinite(y_torch).all():
         non_finite_indices = torch.nonzero(~torch.isfinite(y_torch), as_tuple=True)[0]
@@ -238,10 +235,11 @@ def test_fwd(
     error_is_small, _ = is_close(
         y_torch.flatten().cpu().detach().numpy(),
         y_dpcpp.flatten().cpu().detach().numpy(),
-        rtol=1e-2,
+        rtol=2e-2,
         name="fwd error",
         print_diff=True,
     )
+    assert error_is_small
     if not error_is_small:
         print("Torch output: ", y_torch[-1, :])
         print("DPCPP output: ", y_dpcpp[-1, :])
@@ -251,19 +249,18 @@ def test_fwd(
 
 
 if __name__ == "__main__":
-
-    input_width = 8
+    input_width = 16
     hidden_size = 16
     hidden_layers = 2
     output_width = 16
-    activation_func = "relu"
+    activation_func = "linear"
     # activation_func = "sigmoid"
     output_func = "linear"
     # output_func = "sigmoid"
     dtype = torch.float16
-    use_nwe = False
-    use_weights_of_tinynn = False
-    use_constant_weight = False
+    use_nwe = True
+    use_weights_of_tinynn = True
+    use_constant_weight = True
     test_fwd(
         input_width,
         hidden_size,

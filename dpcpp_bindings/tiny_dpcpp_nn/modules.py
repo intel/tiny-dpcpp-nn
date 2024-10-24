@@ -112,22 +112,14 @@ class _module_function(torch.autograd.Function):
         doutput = doutput * loss_scale
         with torch.no_grad():
             if "encoding_config" in ctx.info:
+                # This is encodings
                 input_grad = None
 
                 if batch_size == 0:
                     grad = torch.zeros_like(params)
-                elif "width" in ctx.info:
-                    # this is NWE with grid encoding
-                    pack_weights = True
-                    _, grad = ctx.native_tnn_module.bwd_with_encoding_grad(
-                        doutput,
-                        input,
-                        pack_weights,
-                        False,  # pack the grad, don't get dldinput
-                    )
                 else:
+                    # this is pure encoding module (only grid encoding)
                     pack_weights = False
-                    # this is pure encoding module
                     _, grad = ctx.native_tnn_module.bwd_with_encoding_grad(
                         doutput,
                         input,
@@ -145,7 +137,6 @@ class _module_function(torch.autograd.Function):
 
         grad = None if grad is None else (grad / loss_scale)
         input_grad = None if input_grad is None else (input_grad / loss_scale)
-
         # 5 inputs to forward, so need 5 grads
         return (None, input_grad, grad, None, None)
 
@@ -153,25 +144,24 @@ class _module_function(torch.autograd.Function):
 class Module(torch.nn.Module):
     def __init__(
         self,
+        dtype,  # Must be specified: float for encoding, half precision for network
         device="xpu",
         store_params_as_full_precision=True,
-        input_dtype=torch.float16,
-        backend_param_dtype=torch.float16,
         use_bias=True,
         init_module=True,
     ):
         super(Module, self).__init__()
-        if not init_module:
-            return
         self.device = device
         self.use_bias = use_bias
-        self.input_dtype = input_dtype
-        self.backend_param_dtype = backend_param_dtype
+        self.dtype = dtype
         self.store_params_as_full_precision = store_params_as_full_precision
-        if backend_param_dtype == torch.float16:
+        if dtype == torch.float16:
             self.loss_scale = 128.0
         else:
             self.loss_scale = 1.0
+
+        if not init_module:
+            return
 
         self.tnn_module = self.create_module()
 
@@ -179,9 +169,7 @@ class Module(torch.nn.Module):
             initial_params = self.tnn_module.initial_params()
             # This explicitely creates a tensor whose memory is managed by PyTorch in modules.py
             params_dtype = (
-                torch.float32
-                if self.store_params_as_full_precision
-                else self.backend_param_dtype
+                torch.float32 if self.store_params_as_full_precision else self.dtype
             )
             cloned_params = initial_params.clone().detach().to(params_dtype)
             self.params = torch.nn.Parameter(cloned_params, requires_grad=True)
@@ -210,7 +198,7 @@ class Module(torch.nn.Module):
 
         assert isinstance(params, torch.Tensor), "Params is not a torch.Tensor"
 
-        self.tnn_module.set_params(params.to(self.backend_param_dtype), packed)
+        self.tnn_module.set_params(params.to(self.dtype), packed)
 
         if not packed:
             packed_weights = self.get_params()  # this is always packed params
@@ -232,7 +220,7 @@ class Module(torch.nn.Module):
             x
             if batch_size == padded_batch_size
             else torch.nn.functional.pad(x, [0, 0, 0, padded_batch_size - batch_size])
-        ).to(dtype=self.input_dtype)
+        ).to(dtype=self.dtype)
 
         if self.name == "network":
             padded_tensor = (
@@ -244,11 +232,11 @@ class Module(torch.nn.Module):
                     "constant",
                     self.use_bias,
                 )
-            ).to(dtype=self.input_dtype)
+            ).to(dtype=self.dtype)
         info = {"is_in_eval_mode": not self.training}
 
         if hasattr(self, "n_hidden_layers"):
-            # added for NWE and Network
+            # added for Network
             info.update(
                 {
                     "n_hidden_layers": self.n_hidden_layers - 1,
@@ -259,7 +247,7 @@ class Module(torch.nn.Module):
             )
 
         if hasattr(self, "encoding_config"):
-            # added for NWE and encoding
+            # added for encoding
             info.update({"encoding_config": self.encoding_config})
 
         self.set_params()
@@ -281,10 +269,12 @@ class Network(Module):
         network_config,
         store_params_as_full_precision=True,
         device="xpu",
-        input_dtype=torch.float16,
-        backend_param_dtype=torch.float16,
+        dtype=torch.float16,
         use_bias=True,
     ):
+        assert (
+            dtype == torch.float16 or dtype == torch.bfloat16
+        ), f"Only torch.float16 or torch.bfloat16 supported, got: {dtype}"
         self.network_config = network_config
 
         self.width = self.network_config["n_neurons"]
@@ -298,9 +288,8 @@ class Network(Module):
         self.name = "network"
         super().__init__(
             device=device,
-            input_dtype=input_dtype,
+            dtype=dtype,
             store_params_as_full_precision=store_params_as_full_precision,
-            backend_param_dtype=backend_param_dtype,
             use_bias=use_bias,
         )
 
@@ -312,7 +301,7 @@ class Network(Module):
             self.activation,
             self.output_activation,
             self.width,
-            str(self.backend_param_dtype),
+            str(self.dtype),
             self.use_bias,
         )
 
@@ -324,10 +313,14 @@ class Encoding(Module):
         encoding_config,
         n_output_dims=None,  # when None, use the default n_output_dim of the encoding
         device="xpu",
-        input_dtype=torch.float,
+        dtype=torch.float,
         store_params_as_full_precision=True,
-        backend_param_dtype=torch.float,
     ):
+        assert dtype == torch.float, (
+            "Only float supported. Grid encodings can only be float, as we "
+            + "don't have atomics for half precision. If this is intended for"
+            + " another encoding, disabling this assert might work."
+        )
         self.n_input_dims = n_input_dims
         self.encoding_config = encoding_config
         self.padded_output_dims = n_output_dims
@@ -338,18 +331,17 @@ class Encoding(Module):
             self.encoding_config["n_dims_to_encode"] = self.n_input_dims
 
         assert (
-            input_dtype == torch.float
+            dtype == torch.float
         ), "Only torch.float is currently supported for encoding"
         assert (
-            backend_param_dtype == torch.float
+            dtype == torch.float
         ), "Only torch.float is currently supported for encoding"
         # Spherical and identity can have non-float, but grid encoding needs
         # float, as half precision atomics are currently not supported in SYCL
         super().__init__(
             device=device,
-            input_dtype=input_dtype,
+            dtype=dtype,
             store_params_as_full_precision=store_params_as_full_precision,
-            backend_param_dtype=backend_param_dtype,
         )
 
         # must call after super().__init__() as it calls create_module, which
@@ -371,17 +363,34 @@ class NetworkWithInputEncoding(Module):
         encoding_config,
         device="xpu",
         store_params_as_full_precision=True,
-        input_dtype=torch.float,
-        backend_param_dtype=torch.float16,
+        dtype=torch.float16,
         use_bias=True,
     ):
-        super().__init__(init_module=False)
+        assert dtype == torch.float16 or dtype == torch.bfloat16, (
+            f"Only torch.float16 or torch.bfloat16 supported, got: {dtype}."
+            + " Note, that dtype here only refers to dtype of Network, as "
+            + "Encoding is always float due to lack of atomics for half precision."
+        )
+        super().__init__(dtype=dtype, init_module=False)
+
+        self.encoding_config = encoding_config
+        self.network_config = network_config
+
+        self.width = self.network_config["n_neurons"]
+        self.n_input_dims = n_input_dims
+        self.n_output_dims = n_output_dims
+        self.n_hidden_layers = self.network_config["n_hidden_layers"]
+        self.activation = get_dpcpp_activation(self.network_config["activation"])
+        self.output_activation = get_dpcpp_activation(
+            self.network_config["output_activation"]
+        )
+        self.name = "network_with_encoding"
+
         self.encoding = Encoding(
             n_input_dims,
             encoding_config,
             device=device,
-            input_dtype=input_dtype,
-            backend_param_dtype=torch.float,
+            dtype=torch.float,
             store_params_as_full_precision=store_params_as_full_precision,
             n_output_dims=network_config["n_neurons"],
         )
@@ -391,18 +400,22 @@ class NetworkWithInputEncoding(Module):
             n_output_dims,
             network_config,
             device=device,
-            input_dtype=torch.float,
+            dtype=dtype,
             store_params_as_full_precision=store_params_as_full_precision,
-            backend_param_dtype=backend_param_dtype,
             use_bias=use_bias,
         )
         self.network_with_encoding = torch.nn.Sequential(self.encoding, self.network)
 
-    def get_params(self):
-        raise RuntimeError("Not implemented")
+    @property
+    def params(self):
+        # We use this usually only for Network, not for encoding params.
+        return self.network.params
 
-    def set_params(self):
-        raise RuntimeError("Not implemented")
+    def get_params(self):
+        raise RuntimeError("Not implemented.")
+
+    def set_params(self, params=None):
+        self.network.set_params(params)
 
     def forward(self, x):
         return self.network_with_encoding(x)
