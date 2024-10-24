@@ -42,8 +42,7 @@ def test_set_params(input_size, output_size, dtype):
         n_input_dims,
         n_output_dims,
         config,
-        input_dtype=dtype,
-        backend_param_dtype=dtype,
+        dtype=dtype,
     )
 
     val = 0.123

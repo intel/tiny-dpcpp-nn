@@ -133,7 +133,7 @@ def get_unpacked_params(model, weights):
         model.width,
         model.n_output_dims,
         model.n_hidden_layers,
-        model.backend_param_dtype,
+        model.dtype,
         model.device,
         "unpack",
     )
@@ -186,14 +186,12 @@ def create_models(
     output_size,
     activation_func,
     output_func,
-    input_dtype,
-    backend_param_dtype,
+    dtype,
     use_nwe,
     use_weights_of_tinynn,
     use_constant_weight=False,
     store_params_as_full_precision=False,
 ):
-    assert not use_nwe, "Currently NetworkWithEncodings is not supported"
     # Create and test CustomMLP
     model_torch = MLP(
         input_size,
@@ -201,7 +199,7 @@ def create_models(
         output_size,
         activation_func,
         output_func,
-        dtype=backend_param_dtype,
+        dtype=dtype,
         nwe_as_ref=use_nwe,
         constant_weight=use_constant_weight,
     )
@@ -227,8 +225,8 @@ def create_models(
             encoding_config=encoding_config,
             network_config=network_config,
             store_params_as_full_precision=store_params_as_full_precision,
-            input_dtype=input_dtype,
-            backend_param_dtype=backend_param_dtype,
+            dtype=dtype,
+            use_bias=False,  # for comparison, we don't use the one padding
         )
     else:
         model_dpcpp = Network(
@@ -236,8 +234,7 @@ def create_models(
             n_output_dims=output_size,
             network_config=network_config,
             store_params_as_full_precision=store_params_as_full_precision,
-            input_dtype=input_dtype,
-            backend_param_dtype=backend_param_dtype,
+            dtype=dtype,
             use_bias=False,  # for comparison, we don't use the one padding
         )
 
