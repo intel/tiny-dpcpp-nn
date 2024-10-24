@@ -90,8 +90,7 @@ def test_regression(dtype, optimiser):
         "relu",
         "linear",
         use_nwe=USE_NWE,
-        input_dtype=torch.float if USE_NWE else dtype,
-        backend_param_dtype=dtype,
+        dtype=dtype,
         use_weights_of_tinynn=True,
         store_params_as_full_precision=False,
     )
@@ -281,8 +280,7 @@ def test_network(dtype, optimiser):
         n_input_dims=input_size,
         n_output_dims=output_size,
         network_config=network_config,
-        input_dtype=dtype,
-        backend_param_dtype=dtype,
+        dtype=dtype,
     )
     # Generate dummy data
     X, y = generate_data(num_samples, input_size, output_size)
@@ -331,8 +329,6 @@ def test_encoding(dtype, optimiser):
         n_input_dims=input_size,
         encoding_config=encoding_config,
         device="xpu",
-        input_dtype=torch.float,
-        backend_param_dtype=torch.float,
     )
 
     # Generate dummy data
@@ -370,8 +366,6 @@ def run_test_network_with_custom_encoding(
         n_input_dims=input_size,
         encoding_config=encoding_config,
         device="xpu",
-        input_dtype=torch.float,
-        backend_param_dtype=torch.float,
     )
     network = Network(
         n_input_dims=encoding.n_output_dims,
@@ -382,8 +376,7 @@ def run_test_network_with_custom_encoding(
             "n_neurons": hidden_size,
             "n_hidden_layers": hidden_layers,
         },
-        input_dtype=dtype,
-        backend_param_dtype=dtype,
+        dtype=dtype,
     )
     nwe = torch.nn.Sequential(encoding, network).to("xpu")
     # Generate dummy data
@@ -446,7 +439,7 @@ def test_network_with_encoding_all(dtype):
 
     print("Testing identity separate")
     run_test_network_with_custom_encoding(
-        identity_config, dtype,  optimiser=optimiser, **hyper_parameters
+        identity_config, dtype, optimiser=optimiser, **hyper_parameters
     )
 
     print("Testing spherical separate")
@@ -459,7 +452,7 @@ def test_network_with_encoding_all(dtype):
 
     print("Testing grid separate")
     run_test_network_with_custom_encoding(
-        grid_config, dtype,  optimiser=optimiser, **hyper_parameters
+        grid_config, dtype, optimiser=optimiser, **hyper_parameters
     )
 
 

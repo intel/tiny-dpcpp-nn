@@ -15,8 +15,7 @@ def test_constructor(dtype):
     N_min = 16
     L = 16
 
-    with pytest.raises(NotImplementedError):
-        xyz_encoder = NetworkWithInputEncoding(
+    xyz_encoder = NetworkWithInputEncoding(
         n_input_dims=3,
         n_output_dims=16,
         encoding_config={
@@ -36,8 +35,7 @@ def test_constructor(dtype):
             "n_neurons": 64,
             "n_hidden_layers": 1,
         },
-        input_dtype=torch.float,
-        backend_param_dtype=dtype,
+        dtype=dtype,
     )
 
     rgb_net = Network(
@@ -50,8 +48,7 @@ def test_constructor(dtype):
             "n_neurons": 64,
             "n_hidden_layers": 2,
         },
-        input_dtype=dtype,
-        backend_param_dtype=dtype,
+        dtype=dtype,
     )
 
     tonemapper_net = Network(
@@ -64,8 +61,7 @@ def test_constructor(dtype):
             "n_neurons": 64,
             "n_hidden_layers": 1,
         },
-        input_dtype=dtype,
-        backend_param_dtype=dtype,
+        dtype=dtype,
     )
 
     sigma_mlp = Network(
@@ -78,8 +74,7 @@ def test_constructor(dtype):
             "n_neurons": 64,
             "n_hidden_layers": 1,
         },
-        input_dtype=dtype,
-        backend_param_dtype=dtype,
+        dtype=dtype,
     )
 
     dir_encoder = Encoding(
