@@ -20,6 +20,7 @@
 #include "grid.h"
 #include "identity.h"
 #include "spherical_harmonics.h"
+#include "frequency.h"
 
 // Base EncodingFactory class
 template <typename T> class EncodingFactory {
@@ -82,6 +83,29 @@ template <typename T> class GridEncodingFactory : public EncodingFactory<T> {
     }
 };
 
+
+// EncodingFactory for GridEncodingTemplated
+template <typename T> class FrequencyEncodingFactory : public EncodingFactory<T> {
+  public:
+    std::shared_ptr<Encoding<T>> create(const json &config, 
+        std::optional<uint32_t> padded_output_width, sycl::queue& Q) const override 
+    {
+        if (!config.contains(EncodingParams::N_FREQUENCIES))
+            throw std::invalid_argument("Config misses " + EncodingParams::N_FREQUENCIES);
+        if (!config.contains(EncodingParams::N_DIMS_TO_ENCODE))
+            throw std::invalid_argument("Config misses " + EncodingParams::N_DIMS_TO_ENCODE);
+
+        const uint32_t n_frequencies = config[EncodingParams::N_FREQUENCIES];
+        const uint32_t n_dims_to_encode = config[EncodingParams::N_DIMS_TO_ENCODE];
+        
+        if (std::numeric_limits<uint32_t>::max() / n_frequencies < 2*n_dims_to_encode)
+            throw std::invalid_argument("n_frequencies * 2 * n_dims_to_encode exceeds uint32_t max");
+
+        return std::make_shared<FrequencyEncoding<T>>(n_frequencies, n_dims_to_encode, 
+            padded_output_width.has_value() ? padded_output_width.value() : 2*n_frequencies*n_dims_to_encode, Q);
+    }
+};
+
 template <typename T> std::shared_ptr<Encoding<T>> create_encoding(const json &config, 
     sycl::queue& Q, std::optional<uint32_t> padded_output_width = std::nullopt) 
 {
@@ -92,7 +116,10 @@ template <typename T> std::shared_ptr<Encoding<T>> create_encoding(const json &c
         else
         {
             const std::string name = config[EncodingParams::ENCODING];
-            if (name != EncodingNames::IDENTITY && name != EncodingNames::SPHERICALHARMONICS && name != EncodingNames::GRID)
+            if (name != EncodingNames::IDENTITY && 
+                name != EncodingNames::SPHERICALHARMONICS && 
+                name != EncodingNames::GRID &&
+                name != EncodingNames::FREQUENCY)
                 throw std::invalid_argument("Unknown encoding type: " + name);
         }
 
@@ -112,6 +139,7 @@ template <typename T> std::shared_ptr<Encoding<T>> create_encoding(const json &c
             EncodingParams::HASH,
             EncodingParams::INTERPOLATION_METHOD,
             EncodingParams::USE_STOCHASTIC_INTERPOLATION,
+            EncodingParams::N_FREQUENCIES
         });
 
         // Check if every key in the config is within the valid keys
@@ -139,6 +167,8 @@ template <typename T> std::shared_ptr<Encoding<T>> create_encoding(const json &c
         factory = std::make_unique<SphericalHarmonicsEncodingFactory<T>>();
     else if (name == EncodingNames::GRID)
         factory = std::make_unique<GridEncodingFactory<T>>();
+    else if (name == EncodingNames::FREQUENCY)
+        factory = std::make_unique<FrequencyEncodingFactory<T>>();
     else
         throw std::invalid_argument("Unknown encoding type: " + name);
 

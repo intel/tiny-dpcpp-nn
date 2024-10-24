@@ -139,9 +139,10 @@ PybindingModule create_network_factory(int input_width, int output_width,
 }
 template <typename T>
 PybindingModule create_encoding_module(std::string encoding_name,
-                                       const json &encoding_config) {
+                                       const json &encoding_config,
+                 std::optional<uint32_t> padded_output_width = std::nullopt) {
   tnn::EncodingModule<T> *encoding_module =
-      new tnn::EncodingModule<T>(encoding_config);
+      new tnn::EncodingModule<T>(encoding_config, padded_output_width);
   return PybindingModule{encoding_module};
 }
 

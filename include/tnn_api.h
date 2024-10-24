@@ -304,20 +304,23 @@ class Module {
 template <typename T>
 class EncodingModule : public Module {
  public:
-  EncodingModule(std::string filename)
+  EncodingModule(std::string filename,
+                 std::optional<uint32_t> padded_output_width = std::nullopt)
       : max_batch_size_(0), output_encoding_ptr_(nullptr) {
     json encoding_config = io::loadJsonConfig(filename);
-    encoding_ = create_encoding<T>(encoding_config, this->get_queue());
+    encoding_ = create_encoding<T>(encoding_config, this->get_queue(),
+                                   padded_output_width);
     initialize_ptr();
   }
 
-  EncodingModule(const json &encoding_config)
+  EncodingModule(const json &encoding_config,
+                 std::optional<uint32_t> padded_output_width = std::nullopt)
       : max_batch_size_(0), output_encoding_ptr_(nullptr) {
     const json encoding_config_validated =
         io::validateAndCopyEncodingConfig(encoding_config);
 
-    encoding_ =
-        create_encoding<T>(encoding_config_validated, this->get_queue());
+    encoding_ = create_encoding<T>(encoding_config_validated, this->get_queue(),
+                                   padded_output_width);
 
     initialize_ptr();
   }

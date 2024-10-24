@@ -12,6 +12,7 @@
 
 #include <iostream>
 #include <vector>
+#include <cmath>
 
 #include "doctest/doctest.h"
 #include "encoding_factory.h"
@@ -339,6 +340,249 @@ TEST_CASE("tinydpcppnn::encoding Grid Encoding") {
                                   1e-3));
   }
 }
+
+///Correctness tests follow Mildenhall, 2020 equation 4 in Sec. 5.1
+///where f(x) = (sin(2^0 * pi * x), cos(2^0 * pi * x), ..., sin(2^(n_fequ-1) * pi * x), cos(2^(n_fequ-1) * pi * x)), 
+TEST_CASE("tinydpcppnn::encoding Frequency Encoding") {
+  SUBCASE("create ok")
+  {
+    sycl::queue q;
+    const json encoding_config{
+        {EncodingParams::N_DIMS_TO_ENCODE, 1},
+        {EncodingParams::N_FREQUENCIES, 1},
+        {EncodingParams::ENCODING, EncodingNames::FREQUENCY}};
+    CHECK_NOTHROW(create_encoding<float>(encoding_config, q));
+  }
+
+  SUBCASE("create no n_frequencies")
+  {
+    sycl::queue q;
+    const json encoding_config{
+        {EncodingParams::N_DIMS_TO_ENCODE, 1},
+        {EncodingParams::ENCODING, EncodingNames::FREQUENCY}};
+    CHECK_THROWS(create_encoding<float>(encoding_config, q));
+  }
+
+  SUBCASE("create n_frequencies 0")
+  {
+    sycl::queue q;
+    const json encoding_config{
+        {EncodingParams::N_DIMS_TO_ENCODE, 1},
+        {EncodingParams::N_FREQUENCIES, 0},
+        {EncodingParams::ENCODING, EncodingNames::FREQUENCY}};
+    CHECK_THROWS(create_encoding<float>(encoding_config, q));
+  }
+
+  SUBCASE("create n_frequencies < 0")
+  {
+    sycl::queue q;
+    const json encoding_config{
+        {EncodingParams::N_DIMS_TO_ENCODE, 1},
+        {EncodingParams::N_FREQUENCIES, -1},
+        {EncodingParams::ENCODING, EncodingNames::FREQUENCY}};
+    CHECK_THROWS(create_encoding<float>(encoding_config, q));
+  }
+
+  SUBCASE("create n_dims_to_encode 0")
+  {
+    sycl::queue q;
+    const json encoding_config{
+        {EncodingParams::N_DIMS_TO_ENCODE, 0},
+        {EncodingParams::N_FREQUENCIES, 1},
+        {EncodingParams::ENCODING, EncodingNames::FREQUENCY}};
+    CHECK_THROWS(create_encoding<float>(encoding_config, q));
+  }
+
+  SUBCASE("create too small padded")
+  {
+    sycl::queue q;
+    const json encoding_config{
+        {EncodingParams::N_DIMS_TO_ENCODE, 1},
+        {EncodingParams::N_FREQUENCIES, 1},
+        {EncodingParams::ENCODING, EncodingNames::FREQUENCY}};
+    CHECK_THROWS(create_encoding<float>(encoding_config, q, 1));
+  }
+
+  SUBCASE("create padded works")
+  {
+    sycl::queue q;
+    const json encoding_config{
+        {EncodingParams::N_DIMS_TO_ENCODE, 1},
+        {EncodingParams::N_FREQUENCIES, 1},
+        {EncodingParams::ENCODING, EncodingNames::FREQUENCY}};
+    CHECK_NOTHROW(create_encoding<float>(encoding_config, q, 2));
+  }
+
+  SUBCASE("create padded works 2")
+  {
+    sycl::queue q;
+    const json encoding_config{
+        {EncodingParams::N_DIMS_TO_ENCODE, 1},
+        {EncodingParams::N_FREQUENCIES, 1},
+        {EncodingParams::ENCODING, EncodingNames::FREQUENCY}};
+    CHECK_NOTHROW(create_encoding<float>(encoding_config, q, 3));
+  }
+
+  SUBCASE("widths correct 1")
+  {
+    sycl::queue q;
+    const json encoding_config{
+        {EncodingParams::N_DIMS_TO_ENCODE, 1},
+        {EncodingParams::N_FREQUENCIES, 1},
+        {EncodingParams::ENCODING, EncodingNames::FREQUENCY}};
+    auto encoding = create_encoding<float>(encoding_config, q);
+    ///check if the encoding has the correct parameters
+    CHECK(encoding->get_padded_output_width() == 2);
+    CHECK(encoding->get_output_width() == 2);
+    CHECK(encoding->get_n_params() == 0);
+    CHECK(encoding->get_input_width() == 1);
+  }
+
+  SUBCASE("widths correct 2")
+  {
+    sycl::queue q;
+    const json encoding_config{
+        {EncodingParams::N_DIMS_TO_ENCODE, 1},
+        {EncodingParams::N_FREQUENCIES, 2},
+        {EncodingParams::ENCODING, EncodingNames::FREQUENCY}};
+    auto encoding = create_encoding<float>(encoding_config, q);
+    ///check if the encoding has the correct parameters
+    CHECK(encoding->get_padded_output_width() == 4);
+    CHECK(encoding->get_output_width() == 4);
+    CHECK(encoding->get_n_params() == 0);
+    CHECK(encoding->get_input_width() == 1);
+  }
+
+  SUBCASE("widths correct 3")
+  {
+    sycl::queue q;
+    const json encoding_config{
+        {EncodingParams::N_DIMS_TO_ENCODE, 3},
+        {EncodingParams::N_FREQUENCIES, 2},
+        {EncodingParams::ENCODING, EncodingNames::FREQUENCY}};
+    auto encoding = create_encoding<float>(encoding_config, q);
+    ///check if the encoding has the correct parameters
+    CHECK(encoding->get_padded_output_width() == 12);
+    CHECK(encoding->get_output_width() == 12);
+    CHECK(encoding->get_n_params() == 0);
+    CHECK(encoding->get_input_width() == 3);
+  }
+
+  SUBCASE("widths correct 4")
+  {
+    sycl::queue q;
+    const json encoding_config{
+        {EncodingParams::N_DIMS_TO_ENCODE, 3},
+        {EncodingParams::N_FREQUENCIES, 2},
+        {EncodingParams::ENCODING, EncodingNames::FREQUENCY}};
+    auto encoding = create_encoding<float>(encoding_config, q, 24);
+    ///check if the encoding has the correct parameters
+    CHECK(encoding->get_padded_output_width() == 24);
+    CHECK(encoding->get_output_width() == 12);
+    CHECK(encoding->get_n_params() == 0);
+    CHECK(encoding->get_input_width() == 3);
+  }
+
+  SUBCASE("forward not padded")
+  {
+    sycl::queue q;
+    const json encoding_config{
+        {EncodingParams::N_DIMS_TO_ENCODE, 1},
+        {EncodingParams::N_FREQUENCIES, 1},
+        {EncodingParams::ENCODING, EncodingNames::FREQUENCY}};
+    auto encoding = create_encoding<float>(encoding_config, q);
+
+    //setup input and output matrices
+    constexpr size_t batch_size = 1;
+    constexpr float input_val = 1.234f;
+    DeviceMatrix<float> input(batch_size, 1, q);
+    input.fill(input_val).wait();
+    DeviceMatrix<float> output(batch_size, encoding->get_padded_output_width(), q);
+    DeviceMatrixView<float> out_view = output.GetView();
+    
+    //run the forward pass
+    CHECK_NOTHROW(encoding->forward_impl(input.GetView(), &out_view));
+    
+    //copy result to host 
+    auto out_host = output.copy_to_host();
+
+    //setup expected values
+    std::vector<float> expected{std::sin((float)M_PI*input_val), std::cos((float)M_PI*input_val)};
+
+    //Check if result is same as expected
+    CHECK(areVectorsWithinTolerance(out_host, expected, 1e-4));
+  }
+
+  SUBCASE("forward padded")
+  {
+    sycl::queue q;
+    const json encoding_config{
+        {EncodingParams::N_DIMS_TO_ENCODE, 1},
+        {EncodingParams::N_FREQUENCIES, 1},
+        {EncodingParams::ENCODING, EncodingNames::FREQUENCY}};
+    auto encoding = create_encoding<float>(encoding_config, q, 4);
+
+    //setup input and output matrices
+    constexpr size_t batch_size = 1;
+    constexpr float input_val = 1.234f;
+    DeviceMatrix<float> input(batch_size, 1, q);
+    input.fill(input_val).wait();
+    DeviceMatrix<float> output(batch_size, encoding->get_padded_output_width(), q);
+    DeviceMatrixView<float> out_view = output.GetView();
+    
+    //run the forward pass
+    CHECK_NOTHROW(encoding->forward_impl(input.GetView(), &out_view));
+    
+    //copy result to host 
+    auto out_host = output.copy_to_host();
+
+    //setup expected values
+    std::vector<float> expected{std::sin((float)M_PI*input_val), std::cos((float)M_PI*input_val), 1, 1};
+
+    //Check if result is same as expected
+    CHECK(areVectorsWithinTolerance(out_host, expected, 1e-4));
+  }
+
+    SUBCASE("forward larger padded")
+  {
+    sycl::queue q;
+    const json encoding_config{
+        {EncodingParams::N_DIMS_TO_ENCODE, 3},
+        {EncodingParams::N_FREQUENCIES, 2},
+        {EncodingParams::ENCODING, EncodingNames::FREQUENCY}};
+    auto encoding = create_encoding<float>(encoding_config, q, 14);
+
+    //setup input and output matrices
+    constexpr size_t batch_size = 2;
+    std::vector<float> input_vals{0,1,2,3,4,5};
+    DeviceMatrix<float> input(batch_size, 3, q);
+    input.copy_from_host(input_vals).wait();
+    DeviceMatrix<float> output(batch_size, encoding->get_padded_output_width(), q);
+    DeviceMatrixView<float> out_view = output.GetView();
+    
+    //run the forward pass
+    CHECK_NOTHROW(encoding->forward_impl(input.GetView(), &out_view));
+    
+    //copy result to host 
+    auto out_host = output.copy_to_host();
+
+    //setup expected values
+    std::vector<float> expected{
+        std::sin((float)M_PI*input_vals[0]), std::cos((float)M_PI*input_vals[0]), std::sin(2.0f*(float)M_PI*input_vals[0]), std::cos(2.0f*(float)M_PI*input_vals[0]), 
+        std::sin((float)M_PI*input_vals[1]), std::cos((float)M_PI*input_vals[1]), std::sin(2.0f*(float)M_PI*input_vals[1]), std::cos(2.0f*(float)M_PI*input_vals[1]),
+        std::sin((float)M_PI*input_vals[2]), std::cos((float)M_PI*input_vals[2]), std::sin(2.0f*(float)M_PI*input_vals[2]), std::cos(2.0f*(float)M_PI*input_vals[2]),
+        1, 1,
+        std::sin((float)M_PI*input_vals[3]), std::cos((float)M_PI*input_vals[3]), std::sin(2.0f*(float)M_PI*input_vals[3]), std::cos(2.0f*(float)M_PI*input_vals[3]), 
+        std::sin((float)M_PI*input_vals[4]), std::cos((float)M_PI*input_vals[4]), std::sin(2.0f*(float)M_PI*input_vals[4]), std::cos(2.0f*(float)M_PI*input_vals[4]),
+        std::sin((float)M_PI*input_vals[5]), std::cos((float)M_PI*input_vals[5]), std::sin(2.0f*(float)M_PI*input_vals[5]), std::cos(2.0f*(float)M_PI*input_vals[5]),
+        1, 1};
+
+    //Check if result is same as expected
+    CHECK(areVectorsWithinTolerance(out_host, expected, 1e-4));
+  }
+
+}
+          
 
 TEST_CASE("tinydpcppnn::encoding bad configs") {
   SUBCASE("Not existing keyword") {

@@ -104,6 +104,7 @@ def get_args():
         "config",
         nargs="?",
         default="data/config_hash.json",
+        # default="data/config_frequency.json",
         help="JSON config for tiny-dpcpp-nn",
     )
     parser.add_argument(
@@ -139,32 +140,34 @@ if __name__ == "__main__":
     image = Image(args.image, device)
     n_channels = image.data.shape[2]
 
-    # model = tnn.NetworkWithInputEncoding(
-    #     n_input_dims=2,
-    #     n_output_dims=n_channels,
-    #     encoding_config=config["encoding"],
-    #     network_config=config["network"],
-    # ).to(device)
-
     # ===================================================================================================
     # The following is equivalent to the above, but slower. Only use "naked" tnn.Encoding and
     # tnn.Network when you don't want to combine them. Otherwise, use tnn.NetworkWithInputEncoding.
     # ===================================================================================================
-
-    encoding = tnn.Encoding(
-        n_input_dims=2,
-        encoding_config=config["encoding"],
-        input_dtype=torch.float,
-        backend_param_dtype=torch.float,
-    )
-    network = tnn.Network(
-        n_input_dims=encoding.n_output_dims,
-        n_output_dims=n_channels,
-        network_config=config["network"],
-        input_dtype=DTYPE,
-        backend_param_dtype=DTYPE,
-    )
-    model = torch.nn.Sequential(encoding, network).to(device)
+    use_nwe = True
+    if use_nwe:
+        model = tnn.NetworkWithInputEncoding(
+            n_input_dims=2,
+            n_output_dims=n_channels,
+            encoding_config=config["encoding"],
+            network_config=config["network"],
+        ).to(device)
+    else:
+        encoding = tnn.Encoding(
+            n_input_dims=2,
+            n_output_dims=32,
+            encoding_config=config["encoding"],
+            input_dtype=torch.float,
+            backend_param_dtype=torch.float,
+        )
+        network = tnn.Network(
+            n_input_dims=encoding.n_output_dims,
+            n_output_dims=n_channels,
+            network_config=config["network"],
+            input_dtype=DTYPE,
+            backend_param_dtype=DTYPE,
+        )
+        model = torch.nn.Sequential(encoding, network).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-2)
 
