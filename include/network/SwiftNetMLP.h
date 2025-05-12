@@ -12,7 +12,7 @@
 
 #pragma once
 
-#include <CL/sycl.hpp>
+#include <sycl/sycl.hpp>
 #include <functional>
 #include <iostream>
 #include <json.hpp>
