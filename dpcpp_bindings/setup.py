@@ -15,7 +15,12 @@ dpcpp_path = os.getenv("CMPLR_ROOT")
 dpcpp_sycl_path = os.path.join(dpcpp_path, "include", "sycl")
 
 conda_path = os.getenv("CONDA_PREFIX")
-conda_sycl_path = os.path.join(conda_path, "include", "sycl")
+conda_sycl_path = None
+if conda_path is not None:
+    conda_sycl_path = os.path.join(conda_path, "include", "sycl")
+    if not os.path.exists(conda_sycl_path):
+        conda_sycl_path = None
+
 
 target_device_map = {
    "PVC": "0",
@@ -82,7 +87,7 @@ setup(
             extra_compile_args={'cxx': [f'-DTARGET_DEVICE={target_device}', '-std=c++20', '-fPIC']},
             include_dirs=(
                 [dpcpp_sycl_path]
-                if not os.path.exists(conda_sycl_path)
+                if conda_sycl_path is None
                 else [conda_sycl_path]
                 + [
                     os.path.join(os.path.dirname(__file__), "../include"),
