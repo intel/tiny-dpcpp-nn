@@ -86,9 +86,9 @@ setup(
             libraries=libraries,
             extra_compile_args={'cxx': [f'-DTARGET_DEVICE={target_device}', '-std=c++20', '-fPIC']},
             include_dirs=(
-                [dpcpp_sycl_path]
+                ([dpcpp_sycl_path]
                 if conda_sycl_path is None
-                else [conda_sycl_path]
+                else [conda_sycl_path])
                 + [
                     os.path.join(os.path.dirname(__file__), "../include"),
                     os.path.join(os.path.dirname(__file__), "../include/network"),
