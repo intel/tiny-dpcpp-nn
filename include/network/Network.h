@@ -63,15 +63,19 @@ template <typename T> class Network : public NetworkBase<T> {
 
     Network(sycl::queue &q, const int n_hidden_layers, const int input_width, const int network_width,
             const int output_width, const WeightInitMode mode, const bool use_bias)
-        : m_q(q), input_width_(PadWidths(input_width, network_width)),
-          output_width_(PadWidths(output_width, network_width)), original_input_width_(input_width),
-          original_output_width_(output_width), n_hidden_layers_(NonNegative(n_hidden_layers)),
-          network_width_(NonNegative(network_width)),
-          m_weights_matrices(get_n_hidden_layers() + 1, get_input_width(), get_network_width(), get_network_width(),
+        : m_q(q), 
+        input_width_(PadWidths(input_width, network_width)),
+        output_width_(PadWidths(output_width, network_width)), 
+        original_output_width_(output_width), 
+        original_input_width_(input_width),
+        n_hidden_layers_(NonNegative(n_hidden_layers)),
+        network_width_(NonNegative(network_width)),
+        use_bias_(use_bias),
+        m_weights_matrices(get_n_hidden_layers() + 1, get_input_width(), get_network_width(), get_network_width(),
                              get_network_width(), get_network_width(), get_output_width(), m_q),
-          m_weightsT_matrices(get_n_hidden_layers() + 1, get_network_width(), get_input_width(), get_network_width(),
-                              get_network_width(), get_output_width(), get_network_width(), m_q),
-          use_bias_(use_bias) {
+        m_weightsT_matrices(get_n_hidden_layers() + 1, get_network_width(), get_input_width(), get_network_width(),
+                              get_network_width(), get_output_width(), get_network_width(), m_q)
+        {
 
         SanityCheck();
         initialize_weights_matrices(input_width, output_width, mode);
@@ -135,14 +139,14 @@ template <typename T> class Network : public NetworkBase<T> {
             throw std::runtime_error(errorMessage);
         }
 
-        if (get_input_width() > network_width_) {
+        if (int(get_input_width()) > network_width_) {
             std::string errorMessage = "Input width of " + std::to_string(get_input_width()) +
                                        " is not supported. Value must be <= network width (" +
                                        std::to_string(network_width_) + ").";
             throw std::runtime_error(errorMessage);
         }
 
-        if (get_output_width() > network_width_) {
+        if (int(get_output_width()) > network_width_) {
             std::string errorMessage = "Input width of " + std::to_string(get_output_width()) +
                                        " is not supported. Value must be <= network width (" +
                                        std::to_string(network_width_) + ").";
@@ -158,14 +162,14 @@ template <typename T> class Network : public NetworkBase<T> {
         if (network_width_ != 16 && network_width_ != 32 && network_width_ != 64 && network_width_ != 128)
             throw std::invalid_argument("Network width has to be a power of 2 between 16 and 128.");
 
-        if (network_width_ != get_input_width() || network_width_ != get_output_width())
+        if (network_width_ != int(get_input_width()) || network_width_ != int(get_output_width()))
             throw std::invalid_argument("Only networks with same input, layer and output width are allowed.");
     }
 
     ///@brief Helper function which sets values of the weights matrices to 0 if
     /// the actual input/output width was padded to the network-allowed input/output width.
     void ZeroWeightsPadding(const int unpadded_input_width, const int unpadded_output_width) {
-        if (unpadded_input_width > get_input_width() || unpadded_output_width > get_output_width())
+        if (unpadded_input_width > int(get_input_width()) || unpadded_output_width > int(get_output_width()))
             throw std::invalid_argument("Padded weights width cannot be less than the unpadded.");
 
         /// we need to copy everything here since we do not want to have an implicit copy of 'this'
@@ -213,7 +217,7 @@ template <typename T> class Network : public NetworkBase<T> {
         }
 
         // output matrix set columns to 0
-        const int output_matrix_pos = m_weights_matrices.GetNumberOfMatrices() - 1;
+        // const int output_matrix_pos = m_weights_matrices.GetNumberOfMatrices() - 1;
         if (unpadded_output_width != padded_output_width) {
             DeviceMatrixView<T> weights = m_weights_matrices.Back();
             m_q.parallel_for(

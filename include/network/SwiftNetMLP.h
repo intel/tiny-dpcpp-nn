@@ -331,7 +331,7 @@ template <typename T, int WIDTH> class SwiftNetMLP : public Network<T> {
                                         std::to_string(intermediate_output_forward.output_n()) + ")");
         }
 
-        if (intermediate_output_forward.GetNumberOfMatrices() != Network<T>::get_n_hidden_layers() + 2) {
+        if (int(intermediate_output_forward.GetNumberOfMatrices()) != Network<T>::get_n_hidden_layers() + 2) {
             throw std::invalid_argument("Not enough matrices in intermediate_output_forward array, expected: " +
                                         std::to_string(Network<T>::get_n_hidden_layers() + 2) + " but got: " +
                                         std::to_string(intermediate_output_forward.GetNumberOfMatrices()));
@@ -368,7 +368,7 @@ template <typename T, int WIDTH> class SwiftNetMLP : public Network<T> {
                                         std::to_string(intermediate_output_forward.middle_n()) + ", " +
                                         std::to_string(intermediate_output_forward.output_n()) + ")");
 
-        if (intermediate_output_forward.GetNumberOfMatrices() != Network<T>::get_n_hidden_layers() + 2)
+        if (int(intermediate_output_forward.GetNumberOfMatrices()) != Network<T>::get_n_hidden_layers() + 2)
             throw std::invalid_argument("Not enough matrices in intermediate_output_forward array. Required: " +
                                         std::to_string(Network<T>::get_n_hidden_layers() + 2) + ", available: " +
                                         std::to_string(intermediate_output_forward.GetNumberOfMatrices()));
@@ -392,7 +392,7 @@ template <typename T, int WIDTH> class SwiftNetMLP : public Network<T> {
                                         std::to_string(intermediate_output_backward.middle_n()) + ", " +
                                         std::to_string(intermediate_output_backward.output_n()) + ")");
 
-        if (intermediate_output_backward.GetNumberOfMatrices() != Network<T>::get_n_hidden_layers() + 1)
+        if (int(intermediate_output_backward.GetNumberOfMatrices()) != Network<T>::get_n_hidden_layers() + 1)
             throw std::invalid_argument("Not enough matrices in intermediate_output_backward array. Required: " +
                                         std::to_string(Network<T>::get_n_hidden_layers() + 1) + ", available: " +
                                         std::to_string(intermediate_output_backward.GetNumberOfMatrices()));

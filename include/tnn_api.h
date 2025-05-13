@@ -383,7 +383,7 @@ class EncodingModule : public Module {
     }
 
     std::unique_ptr<Context> model_ctx = nullptr;
-    const size_t batch_size = grad_output.sizes()[0];
+    const auto batch_size = grad_output.sizes()[0];
     const int64_t input_width = encoding_->get_input_width();
 
     // Assuming input_from_fwd should have dimensions [batch_size,

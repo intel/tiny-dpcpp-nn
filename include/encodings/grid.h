@@ -258,7 +258,7 @@ void kernel_grid_backward_input(const size_t num_elements,
     dL_dx(i, dim) = 0.0f;
   }
 
-  for (int k = 0; k < num_grid_features; ++k) {
+  for (int k = 0; k < int(num_grid_features); ++k) {
     const float dL_dy_local = (float)dL_dy_rm(i, k);
 
     for (uint32_t dim = 0; dim < N_POS_DIMS; ++dim) {
