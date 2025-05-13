@@ -17,6 +17,18 @@ dpcpp_sycl_path = os.path.join(dpcpp_path, "include", "sycl")
 conda_path = os.getenv("CONDA_PREFIX")
 conda_sycl_path = os.path.join(conda_path, "include", "sycl")
 
+target_device_map = {
+   "PVC": "0",
+   "ARC": "1",
+}
+target_device = target_device_map.get(os.getenv("TARGET_DEVICE", "ARC"))
+if target_device is None:
+    raise ValueError(f"TARGET_DEVICE must be one of {sorted(target_device_map.keys())}")
+if os.getenv("TARGET_DEVICE") is None:
+    print("Info: TARGET_DEVICE is not set, defaulting to ARC")
+else:
+    print(f"Info: TARGET_DEVICE is set to {os.getenv('TARGET_DEVICE')}")
+
 setup(
     name="tiny_dpcpp_nn",
     version="0.0.1",
@@ -67,7 +79,7 @@ setup(
                 os.path.join(os.path.dirname(__file__), "..", "source", "common", "common.cpp"),
             ],
             libraries=libraries,
-            extra_compile_args={'cxx': ['-DTARGET_DEVICE=1', '-std=c++20', '-fPIC']},
+            extra_compile_args={'cxx': [f'-DTARGET_DEVICE={target_device}', '-std=c++20', '-fPIC']},
             include_dirs=(
                 [dpcpp_sycl_path]
                 if not os.path.exists(conda_sycl_path)
