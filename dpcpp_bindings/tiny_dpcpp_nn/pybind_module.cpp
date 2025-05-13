@@ -10,14 +10,14 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-// #include <pybind11/functional.h>
-// #include <pybind11/pybind11.h>
-// #include <pybind11/stl.h>  // for automatic conversion
+#include <pybind11/functional.h>
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>  // for automatic conversion
 #include <torch/extension.h>
 
 // clang-format off
 #include "tnn_api.h"  // need to include json before pybind11_json
-// #include "pybind11_json.hpp"
+#include "pybind11_json.hpp"
 // clang-format off
 
 using json = nlohmann::json;

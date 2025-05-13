@@ -79,6 +79,7 @@ setup(
                     os.path.join(os.path.dirname(__file__), "../include/encodings"),
                     os.path.join(os.path.dirname(__file__), "../include/optimizers"),
                     os.path.join(os.path.dirname(__file__), "../extern/json"),
+                    os.path.join(os.path.dirname(__file__), "../extern/pybind11_json"),
                 ]
             ),
         )
