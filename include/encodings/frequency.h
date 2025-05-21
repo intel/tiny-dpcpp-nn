@@ -121,7 +121,7 @@ public:
             const uint32_t outputs_per_input = n_frequencies * 2;
 
             float result = 0.0f;
-            for (int k = 0; k < outputs_per_input; ++k) {
+            for (int k = 0; k < int(outputs_per_input); ++k) {
                 result += (float)dL_doutput(i, j * outputs_per_input + k) * dy_dx[i * n_dims_to_encode * outputs_per_input + j * outputs_per_input + k];
             }
             loc_dL_dinput(i, j) = result;

@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <c10/xpu/XPUStream.h>
 #include <torch/script.h>
 #include <torch/torch.h>
 
@@ -32,6 +33,7 @@
 #include "json.hpp"
 #include "oneapi/mkl.hpp"
 #include "result_check.h"
+#include "tensor_legacy_helper.h"
 
 extern template class SwiftNetMLP<sycl::ext::oneapi::bfloat16, 16>;
 extern template class SwiftNetMLP<sycl::ext::oneapi::bfloat16, 32>;
@@ -292,11 +294,11 @@ class Module {
  private:
   sycl::queue &sycl_queue_;
   static sycl::queue &InitQueue() {
-    // return c10::xpu::getCurrentXPUStream().queue();
-    auto device_type = c10::DeviceType::XPU;
-    c10::impl::VirtualGuardImpl impl(device_type);
-    c10::Stream xpu_stream = impl.getStream(c10::Device(device_type));
-    return xpu::get_queue_from_stream(xpu_stream);
+    return c10::xpu::getCurrentXPUStream().queue();
+    // auto device_type = c10::DeviceType::XPU;
+    // c10::impl::VirtualGuardImpl impl(device_type);
+    // c10::Stream xpu_stream = impl.getStream(c10::Device(device_type));
+    // return xpu::get_queue_from_stream(xpu_stream);
   }
 };
 
@@ -381,7 +383,7 @@ class EncodingModule : public Module {
     }
 
     std::unique_ptr<Context> model_ctx = nullptr;
-    const size_t batch_size = grad_output.sizes()[0];
+    const auto batch_size = grad_output.sizes()[0];
     const int64_t input_width = encoding_->get_input_width();
 
     // Assuming input_from_fwd should have dimensions [batch_size,
