@@ -108,13 +108,16 @@ conda create -n tiny-dpcpp-nn python=3.10 -y
 conda activate tiny-dpcpp-nn
 ```
 
-Install the latest [ipex](https://intel.github.io/intel-extension-for-pytorch/index.html#installation) via
+[Install PyTorch (at the point of writing 2.7)](https://pytorch.org/docs/stable/notes/get_start_xpu.html):
 
-```bash
-python -m pip install torch==2.1.0.post2 torchvision==0.16.0.post2 torchaudio==2.1.0.post2 intel-extension-for-pytorch==2.1.30+xpu oneccl_bind_pt==2.1.300+xpu --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/xpu/us/
+```
+pip install -r requirements.txt
 ```
 
-*Note* please ensure that the IPEX version (2.1.30 in this example) is the same as used in `IPEX_VERSION` in `tiny-dpcpp-nn/CMakeLists.txt`
+Verify that drivers and PyTorch are installed correctly:
+
+```
+python -c "import torch; print(torch.xpu.is_available())"
 
 Install the module (if no `TARGET_DEVICE` is set, the target_device in setup.py is set to `ARC`. Currently `PVC` and `ARC` is supported):
 ```bash
@@ -122,10 +125,6 @@ cd dpcpp_bindings
 TARGET_DEVICE=ARC pip install -e .
 ```
 
-Finally, to test the sample scripts and tests, install the requirements:
-```bash
-cd python && pip install -r requirements.txt
-```
 ### Test the install
 To test that the installation was successful, you can do the following four tests.
 
@@ -152,7 +151,7 @@ To have all tests, run:
 cmake -DTARGET_DEVICE="PVC" -DBUILD_TORCH_TEST="ON" ..
 ```
 
-After all tests are build into `build/`, you can run `cd build/ && make tests` to verfiy that the setup is correct. Please note that we provide tests for both the core `dpcpp` implementation and the `libtorch` wrapper implementation.
+After all tests are build into `build/`, you cvan run `cd build/ && make tests` to verfiy that the setup is correct. Please note that we provide tests for both the core `dpcpp` implementation and the `libtorch` wrapper implementation.
 
 To test whether the pytorch bindings were installed correctly, please run
 
