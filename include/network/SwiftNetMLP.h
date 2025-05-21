@@ -263,7 +263,7 @@ template <typename T, int WIDTH> class SwiftNetMLP : public Network<T> {
             // In WSL2 the device name is just "Intel(R) Graphics"
             Network<T>::get_queue().get_device().template get_info<sycl::info::device::name>().find("Intel(R) Graphics") ==
             std::string::npos)
-            throw std::logic_error("Code built for ARC GPU but tried to run on different device.");
+            throw std::logic_error("Code built for ARC/Flex GPU but tried to run on different device.");
 #else
         static_assert(false && "Values for TARGET_DEVICE either 0 for PVC or 1 for ARC. Set by cmake variable "
                                "-DTARGET_DEVICE=\"PVC\" or -DTARGET_DEVICE=\"ARC\" ");
