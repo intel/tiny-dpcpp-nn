@@ -22,10 +22,13 @@ option(BUILD_DOCUMENTATION "Build the documentation which is online available" O
 option(BUILD_EXAMPLE "Build the examples" OFF)
 
 set(IPEX_VERSION "2.1.30" CACHE STRING "The version of Intel Extension for PyTorch")
-set(TARGET_DEVICE "PVC" CACHE STRING "Valid values {PVC, ARC}")
+set(TARGET_DEVICE "PVC" CACHE STRING "Valid values {PVC, BMG, ARC}")
 
 if (TARGET_DEVICE STREQUAL "PVC")
     message(STATUS "Building for PVC")
+    add_definitions(-DTARGET_DEVICE=0)
+elseif (TARGET_DEVICE STREQUAL "BMG")
+    message(STATUS "Building for BMG")
     add_definitions(-DTARGET_DEVICE=0)
 elseif (TARGET_DEVICE STREQUAL "ARC")
     message(STATUS "Building for ARC")
