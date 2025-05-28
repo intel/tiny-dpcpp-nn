@@ -22,19 +22,21 @@ option(BUILD_DOCUMENTATION "Build the documentation which is online available" O
 option(BUILD_EXAMPLE "Build the examples" OFF)
 
 set(IPEX_VERSION "2.1.30" CACHE STRING "The version of Intel Extension for PyTorch")
-set(TARGET_DEVICE "PVC" CACHE STRING "Valid values {PVC, BMG, ARC}")
+set(TARGET_DEVICE "BMG" CACHE STRING "Valid values {PVC, ACM, BMG}")
 
-if (TARGET_DEVICE STREQUAL "PVC")
-    message(STATUS "Building for PVC")
+set(ACM_DEVICES ACM)
+set(XE_DEVICES PVC BMG)
+
+string( TOUPPER ${TARGET_DEVICE} TARGET_DEVICE_UPPERCASE)
+
+if (TARGET_DEVICE_UPPERCASE IN_LIST XE_DEVICES)
+    message(STATUS "Building for PVC/Xe2")
     add_definitions(-DTARGET_DEVICE=0)
-elseif (TARGET_DEVICE STREQUAL "BMG")
-    message(STATUS "Building for BMG")
-    add_definitions(-DTARGET_DEVICE=0)
-elseif (TARGET_DEVICE STREQUAL "ARC")
-    message(STATUS "Building for ARC")
+elseif (TARGET_DEVICE_UPPERCASE IN_LIST ACM_DEVICES)
+    message(STATUS "Building for Alchemist")
     add_definitions(-DTARGET_DEVICE=1)
 else()
-    message(ERROR "Please set a valid device by adding -DTARGET_DEVICE=<value>, where <value> is either \"PVC\" or \"ARC\"")
+    message(ERROR "Please set a valid device by adding -DTARGET_DEVICE=<value>, where <value> is one of  \"PVC\", \"BMG\", or \"ACM\"")
 endif()
 
 message(WARNING "cmake build system is still WIP.")
