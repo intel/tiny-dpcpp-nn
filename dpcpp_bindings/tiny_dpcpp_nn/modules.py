@@ -3,7 +3,7 @@ import intel_extension_for_pytorch
 import numpy as np
 import time
 
-from tiny_dpcpp_nn_pybind_module import (
+from .tiny_dpcpp_nn_pybind_module import (
     Activation,
     create_network,
     create_encoding,

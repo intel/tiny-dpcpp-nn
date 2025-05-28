@@ -148,16 +148,20 @@ void AdamOptimizer::step(queue q, float loss_scale, DeviceMem<bf16> &weights, De
     auto first_moment = m_first_moments.data();
     auto second_moment = m_second_moments.data();
 
+    bf16* const weights_data = weights.data();
+    bf16* const weightsT_data = weightsT.data();
+    bf16* const gradients_data = gradients.data();
+
     q.parallel_for<>(range<1>(n_elements), [=](id<1> idx) {
          adam_step(idx, n_elements, relative_weight_decay, absolute_weight_decay, weight_clipping_magnitude, loss_scale,
                    learning_rate, non_matrix_learning_rate_factor, beta1, beta2, epsilon, lower_lr_bound,
-                   upper_lr_bound, l2_reg, weights.data(), gradients.data(), first_moment, second_moment, WIDTH);
+                   upper_lr_bound, l2_reg, weights_data, gradients_data, first_moment, second_moment, WIDTH);
      }).wait();
 
     q.parallel_for<>(range<1>(n_elements), [=](id<1> idx) {
          adam_stepT(idx, n_elements, relative_weight_decay, absolute_weight_decay, weight_clipping_magnitude,
                     loss_scale, learning_rate, non_matrix_learning_rate_factor, beta1, beta2, epsilon, lower_lr_bound,
-                    upper_lr_bound, l2_reg, weightsT.data(), gradients.data(), first_moment, second_moment, WIDTH);
+                    upper_lr_bound, l2_reg, weightsT_data, gradients_data, first_moment, second_moment, WIDTH);
      }).wait();
 }
 
