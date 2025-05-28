@@ -29,8 +29,8 @@ class AdamOptimizer : public Optimizer {
     DeviceMem<float> m_first_moments;
     DeviceMem<float> m_second_moments;
 
-    int m_output_rows;
-    int m_n_hidden_layers;
+    // int m_output_rows;
+    // int m_n_hidden_layers;
     float m_learning_rate = 1e-3f;
     float m_l2_reg = 1e-8f;
 };
