@@ -90,40 +90,44 @@ Note: To make the use of the network, you have to disable the implicit scaling o
 
 ## PyTorch extension
 ### Installation
-We provide a pybind wrapper of our tiny-dpcpp-nn implementation for seamless integration into PyTorch. Please refer to [tiny-dpcpp-nn pybind documentation](https://intel.github.io/tiny-dpcpp-nn/manual/pytorch.html) for details.
-
-Please recursively pull the `pybind11` library:
-```bash
-git submodule update --init -- extern/pybind11
-```
-
-[Optional] - Load correct drivers, i.e., ensure that oneAPI and agama version match the required [IPEX version](https://intel.github.io/intel-extension-for-pytorch/index.html#installation)
-```bash
-module load intel-comp-rt/agama-ci-devel/803.29 intel/oneapi/2024.1 cmake/3.26.0
-```
+We provide a pybind wrapper of our tiny-dpcpp-nn implementation for seamless integration into PyTorch.
 
 [Optional] - Create a conda environment
 ```bash
-conda create -n tiny-dpcpp-nn python=3.10 -y
+conda create -n tiny-dpcpp-nn python=3.12 -y
 conda activate tiny-dpcpp-nn
 ```
 
-[Install PyTorch (at the point of writing 2.7)](https://pytorch.org/docs/stable/notes/get_start_xpu.html):
+Install **PyTorch** and **Intel Extension for PyTorch (IPEX)** and ensure that drivers are installed that match your GPU and OS. See the [Intel Extension for PyTorch Installation Guide](https://intel.github.io/intel-extension-for-pytorch/index.html#installation) for details.
 
+For convenience we provide a `requirements.txt` file for PyTorch 2.7 and the corresponding IPEX version.
+```bash
+python -m pip install -r dpcpp_bindings/requirements.txt
 ```
-pip install -r requirements.txt
-```
+
+Install the **oneAPI Base Toolkit** following the instructions from this link [oneAPI Base Toolkit Download](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html).
+Select version 2025.0 for PyTorch 2.7 and IPEX v2.7.10+xpu.
+If you use APT you can install use `sudo apt install -y intel-oneapi-base-toolkit-2025.0` to install version 2025.0 *after the step setting up the APT repository*.
+
 
 Verify that drivers and PyTorch are installed correctly:
 
 ```
 python -c "import torch; print(torch.xpu.is_available())"
+```
 
-Install the module (if no `TARGET_DEVICE` is set, the target_device in setup.py is set to `ARC`. Currently `PVC` and `ARC` is supported):
+Build and install the module with the following command
 ```bash
 cd dpcpp_bindings
-TARGET_DEVICE=ARC pip install -e .
+TARGET_DEVICE=BMG pip install --no-build-isolation .
 ```
+
+If no `TARGET_DEVICE` is set, the target_device in setup.py is set to `BMG` by default. The following values are currently supported.
+| `TARGET_DEVICE` | Graphics Card                                                                               |
+|-----------------|---------------------------------------------------------------------------------------------|
+| BMG (default)   | Arc B-Series Graphics (B570, B580) and Lunar Lake (130V, 140V)                              |
+| PVC             | Intel Data Center GPU Max                                                                   |
+| ACM             | Arc A-Series Graphics (A570, A770, ..) and Data Center GPU Flex Series (Flex 140, Flex 170) |
 
 ### Test the install
 To test that the installation was successful, you can do the following four tests.
