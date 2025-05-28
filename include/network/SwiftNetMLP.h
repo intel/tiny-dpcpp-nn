@@ -25,6 +25,8 @@
 // #include "kernel.h"
 #include "kernel_esimd.h"
 
+namespace syclex = sycl::ext::oneapi::experimental;
+
 // Unique identifier for each activation pair
 constexpr int ActivationPairCode(Activation act, Activation out_act) {
     return static_cast<int>(act) * 100 + static_cast<int>(out_act);
@@ -248,27 +250,27 @@ template <typename T, int WIDTH> class SwiftNetMLP : public Network<T> {
   private:
     /// Generate the relevant kernel class. Has to be called in constructor
     void checkKernels() const {
-#ifndef TARGET_DEVICE
-        static_assert(false && "Need to set TARGET_DEVICE when building.");
-#else
-#if TARGET_DEVICE == 0
-        if (Network<T>::get_queue().get_device().template get_info<sycl::info::device::name>().find(
-                "Data Center GPU") == std::string::npos)
-            throw std::logic_error("Code built for PVC but tried to run on different device.");
-#elif TARGET_DEVICE == 1
-        if (Network<T>::get_queue().get_device().template get_info<sycl::info::device::name>().find("Arc") ==
-            std::string::npos && 
-            Network<T>::get_queue().get_device().template get_info<sycl::info::device::name>().find("Flex") ==
-            std::string::npos &&
-            // In WSL2 the device name is just "Intel(R) Graphics"
-            Network<T>::get_queue().get_device().template get_info<sycl::info::device::name>().find("Intel(R) Graphics") ==
-            std::string::npos)
-            throw std::logic_error("Code built for ARC GPU but tried to run on different device.");
-#else
-        static_assert(false && "Values for TARGET_DEVICE either 0 for PVC or 1 for ARC. Set by cmake variable "
-                               "-DTARGET_DEVICE=\"PVC\" or -DTARGET_DEVICE=\"ARC\" ");
-#endif
-#endif
+
+	const auto arch = Network<T>::get_queue().get_device().template get_info<syclex::info::device::architecture>();
+	switch (arch) {
+	    case syclex::architecture::intel_gpu_pvc:
+	    case syclex::architecture::intel_gpu_pvc_vg:
+	    case syclex::architecture::intel_gpu_bmg_g21:
+	    case syclex::architecture::intel_gpu_lnl_m:
+		if (TARGET_DEVICE != 0) {
+	            throw std::logic_error("Code built for PVC or Xe2 but tried to run on different device. (Set by cmake variable TARGET_DEVICE.)");
+		}
+		break;
+	    case syclex::architecture::intel_gpu_acm_g10:
+	    case syclex::architecture::intel_gpu_acm_g11:
+	    case syclex::architecture::intel_gpu_acm_g12:
+		if (TARGET_DEVICE != 1) {
+	            throw std::logic_error("Code built for Alchemist but tried to run on different device. (Set by cmake variable TARGET_DEVICE.)");
+		}
+		break;
+	    default:
+	    	throw std::logic_error("Unsupported GPU.");
+	}
     }
 
     // TODO: does this have to be virtual?

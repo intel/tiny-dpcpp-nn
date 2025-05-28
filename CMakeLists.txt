@@ -21,16 +21,22 @@ option(BUILD_BENCHMARK "Build benchmarks in 'benchmark' directory" ON)
 option(BUILD_DOCUMENTATION "Build the documentation which is online available" OFF)
 option(BUILD_EXAMPLE "Build the examples" OFF)
 
-set(TARGET_DEVICE "PVC" CACHE STRING "Valid values {PVC, ARC}") # Note that ARC includes FLEX systems
+set(TARGET_DEVICE "BMG" CACHE STRING "Valid values {PVC, ACM, BMG}")
 
-if (TARGET_DEVICE STREQUAL "PVC")
-    message(STATUS "Building for PVC")
+set(ACM_DEVICES ACM)
+set(XE_DEVICES PVC BMG)
+
+string( TOUPPER ${TARGET_DEVICE} TARGET_DEVICE_UPPERCASE)
+
+if (TARGET_DEVICE_UPPERCASE IN_LIST XE_DEVICES)
+    message(STATUS "Building for PVC/Xe2")
     add_definitions(-DTARGET_DEVICE=0)
-elseif (TARGET_DEVICE STREQUAL "ARC")
-    message(STATUS "Building for ARC or Flex")
+
+elseif (TARGET_DEVICE_UPPERCASE IN_LIST ACM_DEVICES)
+    message(STATUS "Building for Alchemist")
     add_definitions(-DTARGET_DEVICE=1)
 else()
-    message(ERROR "Please set a valid device by adding -DTARGET_DEVICE=<value>, where <value> is either \"PVC\" or \"ARC\"")
+    message(ERROR "Please set a valid device by adding -DTARGET_DEVICE=<value>, where <value> is one of  \"PVC\", \"BMG\", or \"ACM\"")
 endif()
 
 
