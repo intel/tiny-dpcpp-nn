@@ -36,7 +36,6 @@
 #pragma once
 
 #include <common.h>
-#include <dpct/dpct.hpp>
 #include <sycl/sycl.hpp>
 
 #include <algorithm>
@@ -220,7 +219,7 @@ template <typename T> T log(T a) { return std::log(a); }
 template <typename T> T exp2(T a) { return std::exp2(a); }
 template <typename T> T log2(T a) { return std::log2(a); }
 template <typename T> T pow(T a, T b) { return std::pow(a, b); }
-template <typename T> T isfinite(T a) { return ::isfinite(a); }
+template <typename T> T isfinite(T a) { return std::isfinite(a); }
 
 // inline  float fma(float a, float b, float c) {
 //  return sycl::fma(a, b, c);
@@ -320,7 +319,10 @@ inline void atomic_add_gmem_float(float *addr, float in) {
     int in_int = *((int *)&in);
     asm("red.relaxed.gpu.global.add.f32 [%0], %1;" ::"l"(addr), "r"(in_int));
 #else
-    dpct::atomic_fetch_add<sycl::access::address_space::generic_space>(addr, in);
+    sycl::atomic_ref<float, sycl::memory_order::relaxed, sycl::memory_scope::device,
+                     sycl::access::address_space::global_space>
+        atomic_addr(*addr);
+    atomic_addr += in;
 #endif
 }
 

@@ -29,7 +29,6 @@
 #include "common.h"
 #include "encoding_factory.h"
 #include "io.h"
-#include "ipex.h"
 #include "json.hpp"
 #include "oneapi/mkl.hpp"
 #include "result_check.h"

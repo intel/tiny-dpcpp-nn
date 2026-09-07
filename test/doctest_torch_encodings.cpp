@@ -10,7 +10,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-#include <ipex.h>
+#include <torch/torch.h>
 
 #include "doctest/doctest.h"
 #include "result_check.h"

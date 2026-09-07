@@ -40,6 +40,7 @@ build/
 # Python
 **/__pycache__/
 *.egg-info
+dpcpp_bindings/_sycl_sources/
 
 # Extern downloaded from CMakeLists.txt
 extern/libtorch

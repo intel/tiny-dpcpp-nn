@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 
-import intel_extension_for_pytorch
 import pytest
 import pdb
 from src.utils import create_models, compare_matrices, get_grad_params, is_close

@@ -1,6 +1,5 @@
 import torch
 import pytest
-import intel_extension_for_pytorch
 from torch.utils.data import DataLoader, TensorDataset
 from src.utils import create_models
 from tiny_dpcpp_nn import Network, Encoding
