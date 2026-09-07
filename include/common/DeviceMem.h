@@ -14,7 +14,6 @@
 #pragma once
 
 #include <atomic>
-#include <dpct/dpct.hpp>
 #include <fstream>
 #include <iostream>
 #include <random>

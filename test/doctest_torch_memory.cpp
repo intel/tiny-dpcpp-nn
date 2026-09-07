@@ -12,7 +12,7 @@
 
 #include "doctest/doctest.h"
 #include "tnn_api.h"
-#include <ipex.h>
+#include <torch/torch.h>
 
 template <typename T> void FillAndTestDeviceMemory(const std::string &test_case_name, sycl::queue &queue) {
     SUBCASE((test_case_name + " - DeviceMatrix").c_str()) {

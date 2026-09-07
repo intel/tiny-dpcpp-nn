@@ -1,5 +1,4 @@
 import torch
-import intel_extension_for_pytorch
 import numpy as np
 import time
 

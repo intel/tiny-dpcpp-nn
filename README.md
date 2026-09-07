@@ -98,16 +98,23 @@ conda create -n tiny-dpcpp-nn python=3.12 -y
 conda activate tiny-dpcpp-nn
 ```
 
-Install **PyTorch** and **Intel Extension for PyTorch (IPEX)** and ensure that drivers are installed that match your GPU and OS. See the [Intel Extension for PyTorch Installation Guide](https://intel.github.io/intel-extension-for-pytorch/index.html#installation) for details.
+Install **PyTorch** with native Intel XPU support (2.13 or newer) and ensure that drivers are installed that match your GPU and OS. See the [PyTorch Intel GPU documentation](https://github.com/pytorch/pytorch?tab=readme-ov-file#intel-gpu-support) for details.
 
-For convenience we provide a `requirements.txt` file for PyTorch 2.7 and the corresponding IPEX version.
+For convenience we provide a `requirements.txt` file that installs the XPU build of PyTorch from the official wheel index:
 ```bash
-python -m pip install -r dpcpp_bindings/requirements.txt
+uv pip install -r dpcpp_bindings/requirements.txt
 ```
 
-Install the **oneAPI Base Toolkit** following the instructions from this link [oneAPI Base Toolkit Download](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html).
-Select version 2025.0 for PyTorch 2.7 and IPEX v2.7.10+xpu.
-If you use APT you can install use `sudo apt install -y intel-oneapi-base-toolkit-2025.0` to install version 2025.0 *after the step setting up the APT repository*.
+Install the **oneAPI DPC++/C++ Compiler** (`icpx`) and libraries (DPL, MKL) via the [oneAPI Base Toolkit](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html). **Use a toolkit version that matches the SYCL runtime bundled with your PyTorch XPU wheel** (for PyTorch 2.13 XPU, that is typically oneAPI 2026 or newer). Building against an older `icpx` while linking against PyTorch’s `libsycl.so.9` can fail at import time with missing or mismatched symbols.
+
+If you install the toolkit under `~/intel/oneapi/2026.1/`, `setup.py` picks that layout by default (you can still set `ONEAPI_ROOT` explicitly). Put `icpx` on `PATH`, for example:
+
+```bash
+export ONEAPI_ROOT=~/intel/oneapi/2026.1
+export PATH=$ONEAPI_ROOT/bin:$PATH
+```
+
+**Note:** If you use `source /opt/intel/oneapi/setvars.sh`, its `LD_LIBRARY_PATH` can conflict with the SYCL runtime bundled with PyTorch XPU wheels. Prefer putting only `icpx` on `PATH` (for example `export PATH=/opt/intel/oneapi/compiler/latest/bin:$PATH`) when installing packages or running Python, or use a oneAPI version that matches the PyTorch XPU SYCL runtime.
 
 
 Verify that drivers and PyTorch are installed correctly:
@@ -119,8 +126,10 @@ python -c "import torch; print(torch.xpu.is_available())"
 Build and install the module with the following command
 ```bash
 cd dpcpp_bindings
-TARGET_DEVICE=BMG pip install --no-build-isolation .
+TARGET_DEVICE=BMG uv pip install --no-build-isolation .
 ```
+
+`setup.py` sets `CXX=icpx` when available and defaults `TORCH_XPU_ARCH_LIST` from `TARGET_DEVICE` to reduce device codegen time.
 
 If no `TARGET_DEVICE` is set, the target_device in setup.py is set to `BMG` by default. The following values are currently supported.
 | `TARGET_DEVICE` | Graphics Card                                                                               |

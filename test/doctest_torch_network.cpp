@@ -16,7 +16,7 @@
 #include "result_check.h"
 #include "tnn_api.h"
 #include "common.h"
-#include <ipex.h>
+#include <torch/torch.h>
 #include "common_test.h"
 
 using namespace sycl;
